@@ -1,0 +1,10 @@
+{
+  "@@locale": "en",
+  "appTitle": "FlowDrop",
+  "appTagline": "Fast, secure LAN file and text transfer",
+  "nearby": "Nearby",
+  "transfers": "Transfers",
+  "history": "History",
+  "settings": "Settings",
+  "showQr": "Show my QR code"
+}
