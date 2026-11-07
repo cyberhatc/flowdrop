@@ -1,48 +1,24 @@
-// The android extension's compileOptions are what AGP reads when it
-// configures JavaCompile tasks, so set them via reflection here — the
-// Kotlin DSL does not expose them on the generic extension type.
-// This must live in projectsEvaluated (the last valid moment before
-// task execution); wrapping inputs in lobby "afterEvaluate" style also
-// gets evaluation-order issues — direct calls avoid them.
- gradle.projectsEvaluated {
-    allprojects {
-        afterEvaluate {
-            try {
-                val android = extensions.findByName("android")
-                val compileOptions = android?.javaClass
-                    ?.getMethod("getCompileOptions")
-                    ?.invoke(android)
-                compileOptions?.javaClass
-                    ?.getMethod("setSourceCompatibility", String::class.java)
-                    ?.invoke(compileOptions, "17")
-                compileOptions?.javaClass
-                    ?.getMethod("setTargetCompatibility", String::class.java)
-                    ?.invoke(compileOptions, "17")
-            } catch (_: Exception) {
-                // Not an Android module — nothing to do.
-            }
-            tasks.withType<JavaCompile>().configureEach {
-                sourceCompatibility = JavaVersion.VERSION_17.toString()
-                targetCompatibility = JavaVersion.VERSION_17.toString()
-            }
-            tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-                compilerOptions.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+// All plugins default to different JVM targets (1.8 vs 17 vs 25)
+// which recent AGP refuses to build. The Gradle-recommended fix for
+// AGP 8+/KGP involves a JVM toolchain so BOTH the Java and Kotlin
+// sides follow the same toolchain release (17) on every subproject.
+allprojects {
+    if (plugins.hasPlugin("java")) {
+        extensions.configure<JavaPluginExtension> {
+            toolchain {
+                languageVersion.set(JavaLanguageVersion.of(17))
             }
         }
     }
-}
-
-// receive_sharing_intent 1.9.0 wants compileSdk 37 while Flutter's
-// Android defaults are older; align its Kotlin+Java targets onto the
-// app's JVM 17 pair. desktop_drop is self-consistent (1.8/1.8) and is
-// deliberately left alone — forcing 17 there is what broke it twice.
-project(":receive_sharing_intent").afterEvaluate {
-    tasks.withType<JavaCompile>().configureEach {
-        sourceCompatibility = JavaVersion.VERSION_17.toString()
-        targetCompatibility = JavaVersion.VERSION_17.toString()
+    plugins.withId("org.jetbrains.kotlin.android") {
+        extensions.configure<org.jetbrains.kotlin.gradle.dsl.KotlinAndroidProjectExtension> {
+            jvmToolchain(17)
+        }
     }
-    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-        compilerOptions.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    plugins.withId("org.jetbrains.kotlin.jvm") {
+        extensions.configure<org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension> {
+            jvmToolchain(17)
+        }
     }
 }
 
@@ -58,15 +34,6 @@ subprojects {
 }
 subprojects {
     project.evaluationDependsOn(":app")
-}
-
-// Align every Kotlin task project-wide to JVM 17. receive_sharing_intent
-// ships with Kotlin defaults that target JVM 25, which the AGP Java
-// compatibility check rejects (sourceCompatibility 17 vs target 25).
-subprojects {
-    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-        compilerOptions.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-    }
 }
 
 tasks.register<Delete>("clean") {
