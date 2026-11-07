@@ -13,8 +13,7 @@ class FlowDropApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final settings =
-        ref.watch(appControllerProvider.select((s) => s.settings));
+    final settings = ref.watch(appControllerProvider.select((s) => s.settings));
 
     final brightness = switch (settings.themeMode) {
       AppThemeMode.dark => Brightness.dark,

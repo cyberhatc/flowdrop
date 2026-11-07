@@ -23,8 +23,7 @@ class _DigestSink implements Sink<Digest> {
 /// arrive from the disk or the socket.
 class IncrementalSha256 {
   final _DigestSink _sink = _DigestSink();
-  late final ByteConversionSink _input =
-      sha256.startChunkedConversion(_sink);
+  late final ByteConversionSink _input = sha256.startChunkedConversion(_sink);
   bool _closed = false;
   int _length = 0;
 

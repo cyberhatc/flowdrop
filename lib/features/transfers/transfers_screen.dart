@@ -35,9 +35,7 @@ class TransfersScreen extends ConsumerWidget {
                         : '${active.length} active transfer${active.length == 1 ? '' : 's'}',
                     style: TextStyle(
                       fontSize: 13,
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurface
+                      color: Theme.of(context).colorScheme.onSurface
                           .withValues(alpha: 0.6),
                     ),
                   ),
@@ -83,9 +81,7 @@ class TransfersScreen extends ConsumerWidget {
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
                 letterSpacing: 0.3,
-                color: Theme.of(context)
-                    .colorScheme
-                    .onSurface
+                color: Theme.of(context).colorScheme.onSurface
                     .withValues(alpha: 0.55),
               ),
             ),
@@ -121,7 +117,8 @@ class _SessionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final outgoing = session.direction == TransferDirection.sent;
-    final running = session.state == TransferState.active ||
+    final running =
+        session.state == TransferState.active ||
         session.state == TransferState.pending;
     final accent = _stateColor(scheme, session.state);
 
@@ -192,7 +189,9 @@ class _SessionCard extends StatelessWidget {
                         ClipboardData(text: session.firstSavedPath!),
                       );
                       messenger.showSnackBar(
-                        const SnackBar(content: Text('Path copied to clipboard')),
+                        const SnackBar(
+                          content: Text('Path copied to clipboard'),
+                        ),
                       );
                     }
                   },
@@ -225,10 +224,7 @@ class _SessionCard extends StatelessWidget {
                 if (running && session.bytesPerSecond > 0)
                   Text(
                     formatSpeed(session.bytesPerSecond),
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      color: scheme.primary,
-                    ),
+                    style: TextStyle(fontSize: 11.5, color: scheme.primary),
                   )
                 else
                   Text(

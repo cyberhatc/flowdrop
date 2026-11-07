@@ -34,7 +34,8 @@ class ClipboardEvent {
 }
 
 /// SHA-256 of [data] as lowercase hex.
-String clipboardHash(String data) => sha256.convert(utf8.encode(data)).toString();
+String clipboardHash(String data) =>
+    sha256.convert(utf8.encode(data)).toString();
 
 /// Loop-prevention guard for clipboard sync.
 ///
@@ -69,7 +70,9 @@ class ClipboardSyncGuard {
     if (_recentRemote.length > maxRecentRemote) {
       final entries = _recentRemote.entries.toList()
         ..sort((a, b) => a.value.compareTo(b.value));
-      for (final entry in entries.take(_recentRemote.length - maxRecentRemote)) {
+      for (final entry in entries.take(
+        _recentRemote.length - maxRecentRemote,
+      )) {
         _recentRemote.remove(entry.key);
       }
     }

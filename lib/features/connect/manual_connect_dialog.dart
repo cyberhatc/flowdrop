@@ -49,7 +49,9 @@ class _ManualConnectDialogState extends ConsumerState<_ManualConnectDialog> {
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
     try {
-      final device = await ref.read(appControllerProvider.notifier).connectManually(
+      final device = await ref
+          .read(appControllerProvider.notifier)
+          .connectManually(
             host: _ip.text,
             port: port,
             fingerprint: _fingerprint.text,

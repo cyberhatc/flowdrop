@@ -33,11 +33,7 @@ class DeviceInfo {
 
   bool get isCompatible => protocolVersion == FlowDropProtocol.version;
 
-  DeviceInfo copyWith({
-    String? name,
-    List<String>? addresses,
-    int? port,
-  }) {
+  DeviceInfo copyWith({String? name, List<String>? addresses, int? port}) {
     return DeviceInfo(
       id: id,
       name: name ?? this.name,
@@ -51,15 +47,15 @@ class DeviceInfo {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'platform': platform,
-        'version': protocolVersion,
-        'publicKey': publicKey,
-        'fingerprint': fingerprint,
-        'addresses': addresses,
-        'port': port,
-      };
+    'id': id,
+    'name': name,
+    'platform': platform,
+    'version': protocolVersion,
+    'publicKey': publicKey,
+    'fingerprint': fingerprint,
+    'addresses': addresses,
+    'port': port,
+  };
 
   factory DeviceInfo.fromJson(Map<String, dynamic> json) {
     final addresses = (json['addresses'] as List<dynamic>? ?? const [])

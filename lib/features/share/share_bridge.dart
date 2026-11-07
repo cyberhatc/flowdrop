@@ -31,27 +31,28 @@ class ShareBridge {
     } on Object {
       // No share at launch is normal.
     }
-    _subscription =
-        ReceiveSharingIntent.instance.getMediaStream().listen(
-              (media) {
-                if (media.isNotEmpty) unawaited(_handle(media));
-              },
-              onError: (_) {
-                // The platform may not support share intents (desktop).
-              },
-              cancelOnError: false,
-            );
+    _subscription = ReceiveSharingIntent.instance.getMediaStream().listen(
+      (media) {
+        if (media.isNotEmpty) unawaited(_handle(media));
+      },
+      onError: (_) {
+        // The platform may not support share intents (desktop).
+      },
+      cancelOnError: false,
+    );
   }
 
   Future<void> _handle(List<SharedMediaFile> media) async {
     final items = media
         .map(
           (entry) => ShareItem(
-            filePath: entry.type == SharedMediaType.text ||
+            filePath:
+                entry.type == SharedMediaType.text ||
                     entry.type == SharedMediaType.url
                 ? null
                 : entry.path,
-            text: entry.type == SharedMediaType.text ||
+            text:
+                entry.type == SharedMediaType.text ||
                     entry.type == SharedMediaType.url
                 ? entry.path
                 : entry.message,

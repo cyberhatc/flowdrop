@@ -26,8 +26,10 @@ void main() {
 
   setUpAll(() async {
     sender = await DeviceIdentity.generate(name: 'Sender', platform: 'test');
-    receiver =
-        await DeviceIdentity.generate(name: 'Receiver', platform: 'test');
+    receiver = await DeviceIdentity.generate(
+      name: 'Receiver',
+      platform: 'test',
+    );
     tempRoot = await Directory.systemTemp.createTemp('flowdrop-it');
     downloads = Directory('${tempRoot.path}/downloads');
     await downloads.create(recursive: true);
@@ -39,10 +41,8 @@ void main() {
       onOffer: (_, _, _) async => approveOffers,
       trustStore: trust,
       tokenManager: tokens,
-      deviceInfoBuilder: (port) => receiver.toDeviceInfo(
-        addresses: const ['127.0.0.1'],
-        port: port,
-      ),
+      deviceInfoBuilder: (port) =>
+          receiver.toDeviceInfo(addresses: const ['127.0.0.1'], port: port),
       onText: (payload, _, _) async {
         lastText = payload;
       },
@@ -55,10 +55,7 @@ void main() {
     if (await tempRoot.exists()) await tempRoot.delete(recursive: true);
   });
 
-  FlowDropClient client({
-    String? expectedFingerprint,
-    DeviceIdentity? as,
-  }) {
+  FlowDropClient client({String? expectedFingerprint, DeviceIdentity? as}) {
     final from = as ?? sender;
     return FlowDropClient(
       host: '127.0.0.1',
@@ -75,9 +72,7 @@ void main() {
   }) async {
     final random = Random(42);
     final file = File('${tempRoot.path}/$name');
-    await file.writeAsBytes(
-      List.generate(size, (_) => random.nextInt(256)),
-    );
+    await file.writeAsBytes(List.generate(size, (_) => random.nextInt(256)));
     return (
       file,
       OfferedFile(
@@ -102,10 +97,7 @@ void main() {
     final sessionId = FlowDropClient.newSessionId();
     final offer = OfferRequest(
       sessionId: sessionId,
-      sender: sender.toDeviceInfo(
-        addresses: const ['127.0.0.1'],
-        port: 0,
-      ),
+      sender: sender.toDeviceInfo(addresses: const ['127.0.0.1'], port: 0),
       files: [offered],
     );
 
@@ -209,10 +201,11 @@ void main() {
 
   test('trusted-only mode still allows trusted senders', () async {
     server.autoDeclineUntrusted = true;
-    await trust.trust(TrustedDevice.fromDevice(sender.toDeviceInfo(
-      addresses: const ['127.0.0.1'],
-      port: 0,
-    )));
+    await trust.trust(
+      TrustedDevice.fromDevice(
+        sender.toDeviceInfo(addresses: const ['127.0.0.1'], port: 0),
+      ),
+    );
     addTearDown(() => server.autoDeclineUntrusted = false);
     final (_, offered) = await makeFile(name: 'friend.bin', size: 10);
     final offer = OfferRequest(
@@ -260,8 +253,7 @@ void main() {
     await expectLater(
       c.pair(payload: payload),
       throwsA(
-        isA<FlowDropException>()
-            .having((e) => e.code, 'code', 'token_expired'),
+        isA<FlowDropException>().having((e) => e.code, 'code', 'token_expired'),
       ),
     );
   });
@@ -283,18 +275,14 @@ void main() {
     await expectLater(
       c.offer(offer),
       throwsA(
-        isA<FlowDropException>()
-            .having((e) => e.statusCode, 'status', 400),
+        isA<FlowDropException>().having((e) => e.statusCode, 'status', 400),
       ),
     );
     expect(await File('${tempRoot.path}/evil.txt').exists(), isFalse);
   });
 
   test('resume continues from the receiver offset', () async {
-    final (file, offered) = await makeFile(
-      name: 'resume.bin',
-      size: 100000,
-    );
+    final (file, offered) = await makeFile(name: 'resume.bin', size: 100000);
     final sessionId = FlowDropClient.newSessionId();
     final offer = OfferRequest(
       sessionId: sessionId,
@@ -312,11 +300,19 @@ void main() {
     final bytes = await file.readAsBytes();
     final half = bytes.length ~/ 2;
     final raw = HttpClient()
-      ..badCertificateCallback =
-          (X509Certificate cert, String host, int port) => true;
+      ..badCertificateCallback = (
+        X509Certificate cert,
+        String host,
+        int port,
+      ) => true;
     addTearDown(() => raw.close(force: true));
     final request = await raw.putUrl(
-      Uri(scheme: 'https', host: '127.0.0.1', port: server.port, path: uploadPath),
+      Uri(
+        scheme: 'https',
+        host: '127.0.0.1',
+        port: server.port,
+        path: uploadPath,
+      ),
     );
     request.headers.set('x-flowdrop-offset', '0');
     request.contentLength = half;
@@ -325,8 +321,9 @@ void main() {
     expect(rawResponse.statusCode, 400); // incomplete -> offset kept
 
     final status = await c.status(sessionId);
-    final fileStatus =
-        status.files.firstWhere((entry) => entry.id == offered.id);
+    final fileStatus = status.files.firstWhere(
+      (entry) => entry.id == offered.id,
+    );
     expect(fileStatus.received, half);
 
     final result = await c.uploadFile(
@@ -337,8 +334,9 @@ void main() {
     );
     expect(result.sha256, sha256.convert(bytes).toString());
     expect(
-        await File('${downloads.path}/${result.savedPath!}').readAsBytes(),
-        bytes);
+      await File('${downloads.path}/${result.savedPath!}').readAsBytes(),
+      bytes,
+    );
   });
 
   test('cancelled sessions reject further uploads', () async {

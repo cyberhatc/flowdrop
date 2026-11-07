@@ -13,9 +13,8 @@ import '../../core/security/fingerprint.dart';
 import '../../ui/glow.dart';
 
 Future<void> showQrScreen(BuildContext context) {
-  return Navigator.of(context).push(
-    MaterialPageRoute<void>(builder: (_) => const QrScreen()),
-  );
+  return Navigator.of(context)
+      .push(MaterialPageRoute<void>(builder: (_) => const QrScreen()));
 }
 
 class QrScreen extends ConsumerStatefulWidget {
@@ -56,8 +55,9 @@ class _QrScreenState extends ConsumerState<QrScreen> {
       _error = null;
     });
     try {
-      final payload =
-          await ref.read(appControllerProvider.notifier).createQrPayload();
+      final payload = await ref
+          .read(appControllerProvider.notifier)
+          .createQrPayload();
       if (!mounted) return;
       setState(() {
         _payload = payload;
@@ -105,7 +105,10 @@ class _QrScreenState extends ConsumerState<QrScreen> {
                       const Spacer(),
                       TextButton.icon(
                         onPressed: () => _openScanner(context),
-                        icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
+                        icon: const Icon(
+                          Icons.qr_code_scanner_rounded,
+                          size: 18,
+                        ),
                         label: const Text('Scan'),
                       ),
                     ],
@@ -192,9 +195,8 @@ class _QrScreenState extends ConsumerState<QrScreen> {
   }
 
   Future<void> _openScanner(BuildContext context) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => const ScanScreen()),
-    );
+    await Navigator.of(context)
+        .push(MaterialPageRoute<void>(builder: (_) => const ScanScreen()));
   }
 }
 
@@ -266,10 +268,7 @@ class _QrBody extends StatelessWidget {
                   const SizedBox(height: 10),
                   const Text(
                     'Code expired',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 10),
                   GlowButton(
@@ -311,19 +310,9 @@ class _ConnectionFacts extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _fact(
-          context,
-          Icons.lan_rounded,
-          payload.addresses.join(', '),
-          scheme,
-        ),
+        _fact(context, Icons.lan_rounded, payload.addresses.join(', '), scheme),
         const SizedBox(height: 8),
-        _fact(
-          context,
-          Icons.tag_rounded,
-          'Port ${payload.port}',
-          scheme,
-        ),
+        _fact(context, Icons.tag_rounded, 'Port ${payload.port}', scheme),
         const SizedBox(height: 8),
         _fact(
           context,
@@ -402,8 +391,9 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
     final navigator = Navigator.of(context);
     try {
       final payload = QrPayload.parse(text);
-      final device =
-          await ref.read(appControllerProvider.notifier).connectWithQr(payload);
+      final device = await ref
+          .read(appControllerProvider.notifier)
+          .connectWithQr(payload);
       if (!mounted) return;
       navigator.popUntil((route) => route.isFirst);
       messenger.showSnackBar(
@@ -493,10 +483,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
                     child: Column(
                       children: [
                         const SizedBox(height: 8),
-                        GlowIcon(
-                          icon: Icons.qr_code_scanner_rounded,
-                          size: 54,
-                        ),
+                        GlowIcon(icon: Icons.qr_code_scanner_rounded, size: 54),
                         const SizedBox(height: 14),
                         const Text(
                           'Camera scanning is not available on this platform',

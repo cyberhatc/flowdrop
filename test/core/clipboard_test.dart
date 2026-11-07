@@ -3,10 +3,10 @@ import 'package:flowdrop/core/clipboard/clipboard_sync.dart';
 import 'package:flowdrop/core/protocol/constants.dart';
 
 ClipboardEvent remote(String data, {DateTime? at}) => ClipboardEvent(
-      data: data,
-      originDeviceId: 'remote-device',
-      createdAt: at ?? DateTime.now(),
-    );
+  data: data,
+  originDeviceId: 'remote-device',
+  createdAt: at ?? DateTime.now(),
+);
 
 void main() {
   group('clipboardHash', () {
@@ -54,10 +54,7 @@ void main() {
       final event = remote('shared', at: start);
       guard.rememberRemote(event);
       final later = start.add(const Duration(minutes: 2));
-      expect(
-        guard.isRemoteRecent('shared', now: later),
-        isFalse,
-      );
+      expect(guard.isRemoteRecent('shared', now: later), isFalse);
       expect(guard.shouldPush('shared', now: later), isTrue);
     });
 

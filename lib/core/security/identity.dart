@@ -65,15 +65,15 @@ class DeviceIdentity {
   }
 
   DeviceIdentity copyWith({String? name}) => DeviceIdentity(
-        id: id,
-        name: name ?? this.name,
-        platform: platform,
-        publicKey: publicKey,
-        privateSeed: privateSeed,
-        certificatePem: certificatePem,
-        privateKeyPem: privateKeyPem,
-        fingerprint: fingerprint,
-      );
+    id: id,
+    name: name ?? this.name,
+    platform: platform,
+    publicKey: publicKey,
+    privateSeed: privateSeed,
+    certificatePem: certificatePem,
+    privateKeyPem: privateKeyPem,
+    fingerprint: fingerprint,
+  );
 
   /// Signs [message] with the Ed25519 identity key.
   Future<String> sign(String message) async {
@@ -162,15 +162,15 @@ class DeviceIdentity {
 
   /// Serialized form for secure storage. Never expose this through logs.
   Map<String, dynamic> toStorageJson() => {
-        'id': id,
-        'name': name,
-        'platform': platform,
-        'publicKey': publicKey,
-        'privateSeed': privateSeed,
-        'certificatePem': certificatePem,
-        'privateKeyPem': privateKeyPem,
-        'fingerprint': fingerprint,
-      };
+    'id': id,
+    'name': name,
+    'platform': platform,
+    'publicKey': publicKey,
+    'privateSeed': privateSeed,
+    'certificatePem': certificatePem,
+    'privateKeyPem': privateKeyPem,
+    'fingerprint': fingerprint,
+  };
 
   factory DeviceIdentity.fromStorageJson(Map<String, dynamic> json) {
     final identity = DeviceIdentity(

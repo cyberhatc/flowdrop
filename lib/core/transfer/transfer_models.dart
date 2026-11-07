@@ -53,18 +53,18 @@ class TransferRecord {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'peerName': peerName,
-        'peerDeviceId': peerDeviceId,
-        'direction': direction.name,
-        'files': files.map((f) => f.toJson()).toList(growable: false),
-        'totalBytes': totalBytes,
-        'startedAt': startedAt.toIso8601String(),
-        if (finishedAt != null) 'finishedAt': finishedAt!.toIso8601String(),
-        'state': state.name,
-        if (savedPath != null) 'savedPath': savedPath,
-        if (textPreview != null) 'textPreview': textPreview,
-      };
+    'id': id,
+    'peerName': peerName,
+    'peerDeviceId': peerDeviceId,
+    'direction': direction.name,
+    'files': files.map((f) => f.toJson()).toList(growable: false),
+    'totalBytes': totalBytes,
+    'startedAt': startedAt.toIso8601String(),
+    if (finishedAt != null) 'finishedAt': finishedAt!.toIso8601String(),
+    'state': state.name,
+    if (savedPath != null) 'savedPath': savedPath,
+    if (textPreview != null) 'textPreview': textPreview,
+  };
 
   factory TransferRecord.fromJson(Map<String, dynamic> json) {
     return TransferRecord(
@@ -80,7 +80,8 @@ class TransferRecord {
           .map(OfferedFile.fromJson)
           .toList(growable: false),
       totalBytes: json['totalBytes'] as int? ?? 0,
-      startedAt: DateTime.tryParse(json['startedAt'] as String? ?? '') ??
+      startedAt:
+          DateTime.tryParse(json['startedAt'] as String? ?? '') ??
           DateTime.now(),
       finishedAt: DateTime.tryParse(json['finishedAt'] as String? ?? ''),
       state: TransferState.values.firstWhere(

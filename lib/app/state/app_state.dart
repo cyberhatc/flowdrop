@@ -85,7 +85,13 @@ class ClipboardEntry {
 
 /// A file or text that arrived through the OS share sheet (Phase 7).
 class ShareItem {
-  const ShareItem({this.filePath, this.name, this.text, this.size = 0, this.mime = 'application/octet-stream'});
+  const ShareItem({
+    this.filePath,
+    this.name,
+    this.text,
+    this.size = 0,
+    this.mime = 'application/octet-stream',
+  });
 
   /// Local file path when the item is a file.
   final String? filePath;
@@ -247,10 +253,12 @@ class AppState {
       trustedDevices: trustedDevices ?? this.trustedDevices,
       notice: clearNotice ? null : (notice ?? this.notice),
       qrPayload: clearQr ? null : (qrPayload ?? this.qrPayload),
-      clipboardText:
-          clearClipboard ? null : (clipboardText ?? this.clipboardText),
-      clipboardFrom:
-          clearClipboard ? null : (clipboardFrom ?? this.clipboardFrom),
+      clipboardText: clearClipboard
+          ? null
+          : (clipboardText ?? this.clipboardText),
+      clipboardFrom: clearClipboard
+          ? null
+          : (clipboardFrom ?? this.clipboardFrom),
       clipboardHistory: clipboardHistory ?? this.clipboardHistory,
       pendingShare: clearPendingShare
           ? const []

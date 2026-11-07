@@ -67,8 +67,12 @@ class FlowDropServer {
   /// Rebuilt on every request so address changes (Wi-Fi roam) are reflected.
   final DeviceInfo Function(int port) deviceInfoBuilder;
 
-  final Future<void> Function(TextPayload payload, String remoteIp, bool trusted)?
-      onText;
+  final Future<void> Function(
+    TextPayload payload,
+    String remoteIp,
+    bool trusted,
+  )?
+  onText;
   final void Function(String fromFingerprint, String data)? onClipboard;
   final void Function(ServerEvent event)? onEvent;
   final int maxFileSize;
@@ -141,7 +145,10 @@ class FlowDropServer {
     router.post('/v1/clipboard', _handleClipboard);
     router.get(
       '/v1/events',
-      webSocketHandler(_handleWebSocket, pingInterval: const Duration(seconds: 20)),
+      webSocketHandler(
+        _handleWebSocket,
+        pingInterval: const Duration(seconds: 20),
+      ),
     );
 
     return const Pipeline()
@@ -193,17 +200,10 @@ class FlowDropServer {
     }
 
     await trustStore.trust(
-      TrustedDevice.fromDevice(
-        pair.device,
-        autoAccept: pair.alwaysTrust,
-      ),
+      TrustedDevice.fromDevice(pair.device, autoAccept: pair.alwaysTrust),
     );
     return _json(
-      PairResponse(
-        ok: true,
-        trusted: true,
-        device: localDevice,
-      ).toJson(),
+      PairResponse(ok: true, trusted: true, device: localDevice).toJson(),
     );
   }
 
@@ -324,7 +324,9 @@ class FlowDropServer {
     if (file == null) return _error(404, 'not_found', 'Unknown file');
 
     final offsetHeader = request.headers['x-flowdrop-offset'];
-    final requestedOffset = offsetHeader == null ? 0 : int.tryParse(offsetHeader);
+    final requestedOffset = offsetHeader == null
+        ? 0
+        : int.tryParse(offsetHeader);
     if (requestedOffset == null || requestedOffset < 0) {
       return _error(400, 'bad_request', 'Invalid offset');
     }
@@ -338,10 +340,11 @@ class FlowDropServer {
       currentOffset = await file.partFile.length();
     }
     if (requestedOffset != currentOffset) {
-      return _json(
-        {'error': 'conflict', 'message': 'Offset mismatch', 'offset': currentOffset},
-        status: 409,
-      );
+      return _json({
+        'error': 'conflict',
+        'message': 'Offset mismatch',
+        'offset': currentOffset,
+      }, status: 409);
     }
     if (currentOffset > file.offer.size) {
       await _deleteQuietly(file.partFile);
@@ -404,14 +407,11 @@ class FlowDropServer {
       file.received = received;
       if (received != file.offer.size) {
         file.state = 'pending';
-        return _json(
-          {
-            'error': 'bad_request',
-            'message': 'Upload is incomplete',
-            'offset': received,
-          },
-          status: 400,
-        );
+        return _json({
+          'error': 'bad_request',
+          'message': 'Upload is incomplete',
+          'offset': received,
+        }, status: 400);
       }
 
       final digest = hasher.close();
@@ -442,22 +442,22 @@ class FlowDropServer {
       );
       if (session.files.values.every((f) => f.state == 'completed')) {
         session.state = 'completed';
-        _broadcast(ServerEvent.completed(
-          sessionId,
-          savedPaths: session.files.values
-              .map((f) => f.finalFile.path)
-              .toList(growable: false),
-        ));
+        _broadcast(
+          ServerEvent.completed(
+            sessionId,
+            savedPaths: session.files.values
+                .map((f) => f.finalFile.path)
+                .toList(growable: false),
+          ),
+        );
       }
 
-      return _json(
-        {
-          'ok': true,
-          'sha256': digest,
-          'size': received,
-          'path': file.relativePath,
-        },
-      );
+      return _json({
+        'ok': true,
+        'sha256': digest,
+        'size': received,
+        'path': file.relativePath,
+      });
     } on Object catch (error) {
       file.state = 'pending';
       await handle?.close();
@@ -514,7 +514,11 @@ class FlowDropServer {
     final payload = TextPayload.fromJson(await _readJson(request));
     final trusted = await trustStore.isTrusted(payload.sender.fingerprint);
     if (!trusted) {
-      return _error(403, 'unauthorized', 'Clipboard sync requires a paired device');
+      return _error(
+        403,
+        'unauthorized',
+        'Clipboard sync requires a paired device',
+      );
     }
     onClipboard?.call(payload.sender.fingerprint, payload.text);
     return _json({'ok': true});
@@ -523,9 +527,11 @@ class FlowDropServer {
   void _handleWebSocket(WebSocketChannel channel, String? protocol) {
     _eventSockets.add(channel);
     try {
-      channel.sink.add(jsonEncode(
-        ServerEvent('hello', {'device': localDevice.toJson()}).toJson(),
-      ));
+      channel.sink.add(
+        jsonEncode(
+          ServerEvent('hello', {'device': localDevice.toJson()}).toJson(),
+        ),
+      );
     } on Object {
       // The peer disconnected immediately.
     }
@@ -573,9 +579,7 @@ class FlowDropServer {
     Set<String> reserved,
   ) async {
     final rootPath = p.normalize(root.absolute.path);
-    var candidate = File(
-      p.joinAll([rootPath, ...relativePath.split('/')]),
-    );
+    var candidate = File(p.joinAll([rootPath, ...relativePath.split('/')]));
     final candidatePath = p.normalize(candidate.absolute.path);
     if (!_isInside(rootPath, candidatePath)) {
       throw const FormatException('Path escapes the download folder');
@@ -680,11 +684,17 @@ class FlowDropServer {
     );
   }
 
-  Response _error(int status, String code, String message, [Map<String, Object?>? extra]) {
-    return _json(
-      {'error': code, 'message': message, ...?extra},
-      status: status,
-    );
+  Response _error(
+    int status,
+    String code,
+    String message, [
+    Map<String, Object?>? extra,
+  ]) {
+    return _json({
+      'error': code,
+      'message': message,
+      ...?extra,
+    }, status: status);
   }
 
   Future<void> _deleteQuietly(FileSystemEntity entity) async {
@@ -695,7 +705,8 @@ class FlowDropServer {
     }
   }
 
-  static Middleware get _noStore => (inner) => (request) async {
+  static Middleware get _noStore =>
+      (inner) => (request) async {
         final response = await inner(request);
         return response.change(
           headers: {
@@ -706,13 +717,17 @@ class FlowDropServer {
         );
       };
 
-  static Middleware get _errorBoundary => (inner) => (request) async {
+  static Middleware get _errorBoundary =>
+      (inner) => (request) async {
         try {
           return await inner(request);
         } on FormatException catch (error) {
           return Response(
             400,
-            body: jsonEncode({'error': 'bad_request', 'message': error.message}),
+            body: jsonEncode({
+              'error': 'bad_request',
+              'message': error.message,
+            }),
             headers: const {'content-type': 'application/json; charset=utf-8'},
           );
         } on Object {

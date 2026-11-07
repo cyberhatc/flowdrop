@@ -32,14 +32,14 @@ class TrustedDevice {
   }
 
   Map<String, dynamic> toJson() => {
-        'deviceId': deviceId,
-        'name': name,
-        'platform': platform,
-        'fingerprint': fingerprint,
-        'addedAt': addedAt.toIso8601String(),
-        if (autoAccept) 'autoAccept': true,
-        if (lastSeen != null) 'lastSeen': lastSeen!.toIso8601String(),
-      };
+    'deviceId': deviceId,
+    'name': name,
+    'platform': platform,
+    'fingerprint': fingerprint,
+    'addedAt': addedAt.toIso8601String(),
+    if (autoAccept) 'autoAccept': true,
+    if (lastSeen != null) 'lastSeen': lastSeen!.toIso8601String(),
+  };
 
   factory TrustedDevice.fromJson(Map<String, dynamic> json) {
     return TrustedDevice(
@@ -47,14 +47,18 @@ class TrustedDevice {
       name: json['name'] as String? ?? 'Unknown device',
       platform: json['platform'] as String? ?? 'unknown',
       fingerprint: json['fingerprint'] as String,
-      addedAt: DateTime.tryParse(json['addedAt'] as String? ?? '') ??
+      addedAt:
+          DateTime.tryParse(json['addedAt'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
       autoAccept: json['autoAccept'] == true,
       lastSeen: DateTime.tryParse(json['lastSeen'] as String? ?? ''),
     );
   }
 
-  factory TrustedDevice.fromDevice(DeviceInfo device, {bool autoAccept = false}) {
+  factory TrustedDevice.fromDevice(
+    DeviceInfo device, {
+    bool autoAccept = false,
+  }) {
     return TrustedDevice(
       deviceId: device.id,
       name: device.name,

@@ -58,9 +58,7 @@ class IncomingOfferDialog extends ConsumerWidget {
                   sender.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium
+                  style: Theme.of(context).textTheme.titleMedium
                       ?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 3),
@@ -344,9 +342,8 @@ class IncomingTextDialog extends ConsumerWidget {
           onPressed: () async {
             await Clipboard.setData(ClipboardData(text: entry.text));
             if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Text copied')),
-              );
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(const SnackBar(content: Text('Text copied')));
             }
           },
           icon: const Icon(Icons.copy_rounded, size: 16),
@@ -354,14 +351,14 @@ class IncomingTextDialog extends ConsumerWidget {
         ),
         TextButton.icon(
           onPressed: () async {
-            final saved =
-                await controller.saveTextAsFile(entry.text, entry.senderName);
+            final saved = await controller.saveTextAsFile(
+              entry.text,
+              entry.senderName,
+            );
             if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(saved ?? 'Saved as .txt'),
-                ),
-              );
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text(saved ?? 'Saved as .txt')));
             }
           },
           icon: const Icon(Icons.save_rounded, size: 16),

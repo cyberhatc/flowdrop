@@ -42,11 +42,7 @@ class NeonBackground extends StatelessWidget {
 }
 
 class _Blob extends StatelessWidget {
-  const _Blob({
-    required this.color,
-    required this.size,
-    required this.opacity,
-  });
+  const _Blob({required this.color, required this.size, required this.opacity});
 
   final Color color;
   final double size;
@@ -137,9 +133,7 @@ class GlowCard extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(
-          color: tint.withValues(alpha: isDark ? 0.18 : 0.14),
-        ),
+        border: Border.all(color: tint.withValues(alpha: isDark ? 0.18 : 0.14)),
         gradient: border,
       ),
       child: Material(
@@ -248,12 +242,7 @@ enum GlowTone { primary, secondary, ghost }
 
 /// Small tinted icon inside a rounded square.
 class GlowIcon extends StatelessWidget {
-  const GlowIcon({
-    super.key,
-    required this.icon,
-    this.color,
-    this.size = 44,
-  });
+  const GlowIcon({super.key, required this.icon, this.color, this.size = 44});
 
   final IconData icon;
   final Color? color;
@@ -339,12 +328,7 @@ class StatusPill extends StatelessWidget {
 
 /// Headline with an accent gradient fill.
 class GradientHeadline extends StatelessWidget {
-  const GradientHeadline(
-    this.text, {
-    super.key,
-    this.style,
-    this.textAlign,
-  });
+  const GradientHeadline(this.text, {super.key, this.style, this.textAlign});
 
   final String text;
   final TextStyle? style;
@@ -353,16 +337,15 @@ class GradientHeadline extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final base = style ??
-        Theme.of(context).textTheme.headlineMedium?.copyWith(
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.5,
-            );
+    final base =
+        style ??
+        Theme.of(context).textTheme.headlineMedium
+            ?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.5);
     return ShaderMask(
       blendMode: BlendMode.srcIn,
-      shaderCallback: (bounds) => LinearGradient(
-        colors: [scheme.primary, scheme.secondary],
-      ).createShader(bounds),
+      shaderCallback: (bounds) =>
+          LinearGradient(colors: [scheme.primary, scheme.secondary])
+              .createShader(bounds),
       child: Text(text, style: base, textAlign: textAlign),
     );
   }
@@ -424,11 +407,7 @@ class _PulseDotState extends State<PulseDot>
 
 /// Rotating radar sweep drawn behind the peer bubbles.
 class RadarSweep extends StatefulWidget {
-  const RadarSweep({
-    super.key,
-    required this.color,
-    this.size = 320,
-  });
+  const RadarSweep({super.key, required this.color, this.size = 320});
 
   final Color color;
   final double size;

@@ -55,7 +55,9 @@ class FlowDropTheme {
 
     final background = isDark ? ink : const Color(0xFFF3F6FF);
     final surface = isDark ? panel : Colors.white;
-    final onSurface = isDark ? const Color(0xFFE9F0FF) : const Color(0xFF101828);
+    final onSurface = isDark
+        ? const Color(0xFFE9F0FF)
+        : const Color(0xFF101828);
 
     final scheme = ColorScheme(
       brightness: brightness,
@@ -102,9 +104,7 @@ class FlowDropTheme {
       dialogTheme: DialogThemeData(
         backgroundColor: isDark ? inkRaised : Colors.white,
         surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       ),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: isDark ? inkRaised : Colors.white,
@@ -127,9 +127,7 @@ class FlowDropTheme {
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(
-            color: onSurface.withValues(alpha: 0.12),
-          ),
+          borderSide: BorderSide(color: onSurface.withValues(alpha: 0.12)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -152,12 +150,12 @@ class FlowDropTheme {
       ),
       dividerColor: onSurface.withValues(alpha: 0.08),
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: isDark ? const Color(0xFF16203A) : const Color(0xFF1B2436),
+        backgroundColor: isDark
+            ? const Color(0xFF16203A)
+            : const Color(0xFF1B2436),
         contentTextStyle: const TextStyle(color: Colors.white),
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: isDark

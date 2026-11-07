@@ -21,10 +21,10 @@ class Peer {
       DateTime.now().difference(lastSeen) > FlowDropProtocol.peerTimeout;
 
   Peer touched({PeerSource? source}) => Peer(
-        device: device,
-        lastSeen: DateTime.now(),
-        source: source ?? this.source,
-      );
+    device: device,
+    lastSeen: DateTime.now(),
+    source: source ?? this.source,
+  );
 }
 
 /// Keeps track of devices seen recently and exposes a sorted, de-duplicated
@@ -33,8 +33,7 @@ class Peer {
 /// Identity is the device id, not the IP: a peer that roams between Wi-Fi and
 /// hotspot keeps one radar bubble.
 class PeerRegistry {
-  PeerRegistry({Duration? tick})
-      : _tick = tick ?? const Duration(seconds: 2) {
+  PeerRegistry({Duration? tick}) : _tick = tick ?? const Duration(seconds: 2) {
     _timer = Timer.periodic(_tick, (_) => _prune());
   }
 
@@ -81,8 +80,8 @@ class PeerRegistry {
     final list = _peers.values.toList();
     list.sort((a, b) {
       final byName = a.device.name.toLowerCase().compareTo(
-            b.device.name.toLowerCase(),
-          );
+        b.device.name.toLowerCase(),
+      );
       return byName != 0 ? byName : a.device.id.compareTo(b.device.id);
     });
     return List.unmodifiable(list);

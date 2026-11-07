@@ -4,16 +4,16 @@ import 'package:flowdrop/core/protocol/device.dart';
 import 'package:flowdrop/core/protocol/offers.dart';
 
 DeviceInfo sampleDevice() => const DeviceInfo(
-      id: 'device-1',
-      name: 'Test Laptop',
-      platform: 'windows',
-      publicKey: 'cHViag==',
-      fingerprint:
-          '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
-      addresses: ['192.168.1.10'],
-      port: FlowDropProtocol.defaultPort,
-      protocolVersion: FlowDropProtocol.version,
-    );
+  id: 'device-1',
+  name: 'Test Laptop',
+  platform: 'windows',
+  publicKey: 'cHViag==',
+  fingerprint:
+      '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+  addresses: ['192.168.1.10'],
+  port: FlowDropProtocol.defaultPort,
+  protocolVersion: FlowDropProtocol.version,
+);
 
 void main() {
   group('DeviceInfo', () {
@@ -84,10 +84,7 @@ void main() {
         () => OfferRequest.fromJson({
           'sessionId': 's1',
           'sender': sampleDevice().toJson(),
-          'files': [
-            file.toJson(),
-            file.toJson(),
-          ],
+          'files': [file.toJson(), file.toJson()],
         }),
         throwsA(isA<FormatException>()),
       );

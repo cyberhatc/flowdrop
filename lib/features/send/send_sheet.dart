@@ -79,8 +79,10 @@ class _SendSheetState extends ConsumerState<_SendSheet> {
         final result = await scanFolder(picked);
         if (result.entries.isEmpty) {
           if (mounted) {
-            setState(() => _error =
-                'That folder is empty or nothing inside can be sent.');
+            setState(
+              () => _error =
+                  'That folder is empty or nothing inside can be sent.',
+            );
           }
         } else {
           for (final entry in result.entries) {
@@ -130,9 +132,9 @@ class _SendSheetState extends ConsumerState<_SendSheet> {
     final text = _text.text;
     navigator.pop();
     unawaited(
-      controller
-          .sendToPeer(peer: widget.peer, files: files, text: text)
-          .then((error) {
+      controller.sendToPeer(peer: widget.peer, files: files, text: text).then((
+        error,
+      ) {
         if (error != null) {
           messenger.showSnackBar(SnackBar(content: Text(error)));
         } else {
@@ -157,10 +159,7 @@ class _SendSheetState extends ConsumerState<_SendSheet> {
           children: [
             Row(
               children: [
-                GlowIcon(
-                  icon: _platformIcon(widget.peer.platform),
-                  size: 46,
-                ),
+                GlowIcon(icon: _platformIcon(widget.peer.platform), size: 46),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(
@@ -168,9 +167,8 @@ class _SendSheetState extends ConsumerState<_SendSheet> {
                     children: [
                       Text(
                         'Send to ${widget.peer.name}',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
+                        style: Theme.of(context).textTheme.titleLarge
+                            ?.copyWith(fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(height: 2),
                       Text(

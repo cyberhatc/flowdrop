@@ -24,8 +24,10 @@ void main() {
 
     test('missing visibility also defaults to everyone', () {
       const defaults = AppSettings();
-      expect(AppSettings.fromJson(defaults.toJson()).visibility,
-          VisibilityMode.everyone);
+      expect(
+        AppSettings.fromJson(defaults.toJson()).visibility,
+        VisibilityMode.everyone,
+      );
     });
 
     test('copyWith changes visibility only', () {

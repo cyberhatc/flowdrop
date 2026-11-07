@@ -96,8 +96,12 @@ class QrPayload {
     final port = int.tryParse(params['p'] ?? '');
     final fingerprint = params['fp'] ?? '';
     final expiresSeconds = int.tryParse(params['exp'] ?? '');
-    if (id == null || id.isEmpty) throw const FormatException('Missing device id');
-    if (token == null || token.isEmpty) throw const FormatException('Missing token');
+    if (id == null || id.isEmpty) {
+      throw const FormatException('Missing device id');
+    }
+    if (token == null || token.isEmpty) {
+      throw const FormatException('Missing token');
+    }
     if (port == null || port < 1 || port > 65535) {
       throw const FormatException('Invalid port');
     }
@@ -113,8 +117,9 @@ class QrPayload {
     if (addresses.isEmpty) throw const FormatException('Missing address');
     if (addresses.length > 8) throw const FormatException('Too many addresses');
 
-    final expiresAt =
-        DateTime.fromMillisecondsSinceEpoch(expiresSeconds * 1000);
+    final expiresAt = DateTime.fromMillisecondsSinceEpoch(
+      expiresSeconds * 1000,
+    );
     final reference = now ?? DateTime.now();
     if (!reference.isBefore(expiresAt)) {
       throw const FormatException('This code has expired');

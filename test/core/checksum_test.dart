@@ -10,7 +10,10 @@ void main() {
       final hasher = IncrementalSha256();
       hasher.add([1, 2, 3]);
       hasher.add([4, 5, 6, 7, 8, 9]);
-      expect(hasher.close(), sha256.convert([1, 2, 3, 4, 5, 6, 7, 8, 9]).toString());
+      expect(
+        hasher.close(),
+        sha256.convert([1, 2, 3, 4, 5, 6, 7, 8, 9]).toString(),
+      );
       expect(hasher.length, 9);
     });
 

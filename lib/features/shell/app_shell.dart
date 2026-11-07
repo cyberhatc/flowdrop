@@ -65,8 +65,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     try {
       await ref.read(appControllerProvider.notifier).init();
       // Share sheet bridge (Android SEND intent + iOS with extension).
-      _shareBridge =
-          ShareBridge(ref.read(appControllerProvider.notifier));
+      _shareBridge = ShareBridge(ref.read(appControllerProvider.notifier));
       unawaited(_shareBridge?.attach());
     } finally {
       if (mounted) _starting = false;
@@ -102,8 +101,10 @@ class _AppShellState extends ConsumerState<AppShell> {
     final controller = ref.read(appControllerProvider.notifier);
     final scheme = Theme.of(context).colorScheme;
 
-    ref.listen<String?>(appControllerProvider.select((s) => s.notice),
-        (previous, next) {
+    ref.listen<String?>(appControllerProvider.select((s) => s.notice), (
+      previous,
+      next,
+    ) {
       if (next == null || next == previous) return;
       final messenger = ScaffoldMessenger.of(context);
       messenger.showSnackBar(SnackBar(content: Text(next)));
@@ -112,44 +113,50 @@ class _AppShellState extends ConsumerState<AppShell> {
 
     // Incoming offers: show dialog for each new pending offer.
     ref.listen<List<IncomingOffer>>(
-        appControllerProvider.select((s) => s.pendingOffers), (previous, next) {
-      for (final offer in next) {
-        if (_showedOffers.add(offer.sessionId)) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) return;
-            showIncomingOfferDialog(context, offer).whenComplete(() {
-              _showedOffers.remove(offer.sessionId);
+      appControllerProvider.select((s) => s.pendingOffers),
+      (previous, next) {
+        for (final offer in next) {
+          if (_showedOffers.add(offer.sessionId)) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              showIncomingOfferDialog(context, offer).whenComplete(() {
+                _showedOffers.remove(offer.sessionId);
+              });
             });
-          });
+          }
         }
-      }
-    });
+      },
+    );
 
     // Incoming text (from /v1/text for third-party senders).
     ref.listen<List<IncomingText>>(
-        appControllerProvider.select((s) => s.incomingTexts), (previous, next) {
-      for (final entry in next) {
-        final key = _TextKey(entry.senderName, entry.receivedAt);
-        if (_showedTexts.add(key)) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) return;
-            showIncomingTextDialog(context, entry).whenComplete(() {
-              _showedTexts.remove(key);
+      appControllerProvider.select((s) => s.incomingTexts),
+      (previous, next) {
+        for (final entry in next) {
+          final key = _TextKey(entry.senderName, entry.receivedAt);
+          if (_showedTexts.add(key)) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              showIncomingTextDialog(context, entry).whenComplete(() {
+                _showedTexts.remove(key);
+              });
             });
-          });
+          }
         }
-      }
-    });
+      },
+    );
 
     // Shares that arrived through the OS share sheet.
     ref.listen<List<ShareItem>>(
-        appControllerProvider.select((s) => s.pendingShare), (previous, next) {
-      if (next.isEmpty || previous == next) return;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        showShareSheet(context, next);
-      });
-    });
+      appControllerProvider.select((s) => s.pendingShare),
+      (previous, next) {
+        if (next.isEmpty || previous == next) return;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          showShareSheet(context, next);
+        });
+      },
+    );
 
     if (state.fatalError != null && !state.ready) {
       return _FatalError(
@@ -187,151 +194,149 @@ class _AppShellState extends ConsumerState<AppShell> {
     return CallbackShortcuts(
       bindings: shortcuts,
       child: Scaffold(
-      extendBody: true,
-      body: DropTarget(
-        onDragEntered: (_) => setState(() => _dragging = true),
-        onDragExited: (_) => setState(() => _dragging = false),
-        onDragDone: (details) => _handleDrop(details),
-        child: Stack(
-          children: [
-            NeonBackground(
-              child: wide
-                  ? Row(
-                      children: [
-                        NavigationRail(
-                          selectedIndex: _tab,
-                          onDestinationSelected: (i) =>
-                              setState(() => _tab = i),
-                          labelType: NavigationRailLabelType
-                              .none, // custom labels below
-                          destinations: [
-                            for (var i = 0; i < _labels.length; i++)
-                              NavigationRailDestination(
-                                icon: Badge(
-                                  isLabelVisible: i == 1 && active > 0 ||
-                                      i == 0 && pending > 0,
-                                  label: Text(
-                                    i == 0 && pending > 0
-                                        ? '$pending'
-                                        : '$active',
-                                    style: const TextStyle(fontSize: 9),
+        extendBody: true,
+        body: DropTarget(
+          onDragEntered: (_) => setState(() => _dragging = true),
+          onDragExited: (_) => setState(() => _dragging = false),
+          onDragDone: (details) => _handleDrop(details),
+          child: Stack(
+            children: [
+              NeonBackground(
+                child: wide
+                    ? Row(
+                        children: [
+                          NavigationRail(
+                            selectedIndex: _tab,
+                            onDestinationSelected: (i) =>
+                                setState(() => _tab = i),
+                            labelType: NavigationRailLabelType
+                                .none, // custom labels below
+                            destinations: [
+                              for (var i = 0; i < _labels.length; i++)
+                                NavigationRailDestination(
+                                  icon: Badge(
+                                    isLabelVisible:
+                                        i == 1 && active > 0 ||
+                                        i == 0 && pending > 0,
+                                    label: Text(
+                                      i == 0 && pending > 0
+                                          ? '$pending'
+                                          : '$active',
+                                      style: const TextStyle(fontSize: 9),
+                                    ),
+                                    child: Icon(_icons[i]),
                                   ),
-                                  child: Icon(_icons[i]),
+                                  label: Text(_labels[i]),
                                 ),
-                                label: Text(_labels[i]),
-                              ),
-                          ],
+                            ],
+                          ),
+                          const VerticalDivider(width: 1),
+                          Expanded(child: body),
+                        ],
+                      )
+                    : body,
+              ),
+              if (_dragging)
+                IgnorePointer(
+                  child: Container(
+                    color: Colors.black.withValues(alpha: 0.55),
+                    alignment: Alignment.center,
+                    child: GlowCard(
+                      accent: scheme.primary,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          GlowIcon(icon: Icons.cloud_upload_rounded, size: 56),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Drop files to send',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'FlowDrop will pick a device to forward them to',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: scheme.onSurface.withValues(alpha: 0.6),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        bottomNavigationBar: wide
+            ? null
+            : NavigationBar(
+                selectedIndex: _tab,
+                onDestinationSelected: (i) => setState(() => _tab = i),
+                destinations: [
+                  for (var i = 0; i < _labels.length; i++)
+                    NavigationDestination(
+                      icon: Badge(
+                        isLabelVisible:
+                            i == 1 && active > 0 || i == 0 && pending > 0,
+                        label: Text(
+                          i == 0 && pending > 0 ? '$pending' : '$active',
+                          style: const TextStyle(fontSize: 9),
                         ),
-                        const VerticalDivider(width: 1),
-                        Expanded(child: body),
-                      ],
-                    )
-                  : body,
-            ),
-            if (_dragging)
-              IgnorePointer(
-                child: Container(
-                  color: Colors.black.withValues(alpha: 0.55),
-                  alignment: Alignment.center,
-                  child: GlowCard(
-                    accent: scheme.primary,
+                        child: Icon(_icons[i]),
+                      ),
+                      label: _labels[i],
+                    ),
+                ],
+              ),
+        floatingActionButton: state.serverRunning
+            ? FloatingActionButton.small(
+                heroTag: 'status',
+                tooltip: state.serverPort > 0
+                    ? 'Listening on port ${state.serverPort}'
+                    : 'Server running',
+                onPressed: () => showModalBottomSheet<void>(
+                  context: context,
+                  showDragHandle: true,
+                  builder: (context) => Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 4, 22, 22),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        GlowIcon(
-                          icon: Icons.cloud_upload_rounded,
-                          size: 56,
-                        ),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Drop files to send',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
                         Text(
-                          'FlowDrop will pick a device to forward them to',
+                          'FlowDrop is listening',
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          state.serverPort > 0
+                              ? 'HTTPS server on port ${state.serverPort} · pinned client certificate required.'
+                              : 'HTTPS server running with a pinned client certificate.',
                           style: TextStyle(
-                            fontSize: 12.5,
-                            color: scheme.onSurface.withValues(alpha: 0.6),
+                            fontSize: 13,
+                            height: 1.45,
+                            color: scheme.onSurface.withValues(alpha: 0.7),
                           ),
+                        ),
+                        const SizedBox(height: 14),
+                        GlowButton(
+                          label: 'Done',
+                          tone: GlowTone.ghost,
+                          expanded: true,
+                          onPressed: () => Navigator.of(context).pop(),
                         ),
                       ],
                     ),
                   ),
                 ),
-              ),
-          ],
-        ),
-      ),
-      bottomNavigationBar: wide
-          ? null
-          : NavigationBar(
-              selectedIndex: _tab,
-              onDestinationSelected: (i) => setState(() => _tab = i),
-              destinations: [
-                for (var i = 0; i < _labels.length; i++)
-                  NavigationDestination(
-                    icon: Badge(
-                      isLabelVisible:
-                          i == 1 && active > 0 || i == 0 && pending > 0,
-                      label: Text(
-                        i == 0 && pending > 0 ? '$pending' : '$active',
-                        style: const TextStyle(fontSize: 9),
-                      ),
-                      child: Icon(_icons[i]),
-                    ),
-                    label: _labels[i],
-                  ),
-              ],
-            ),
-      floatingActionButton: state.serverRunning
-          ? FloatingActionButton.small(
-              heroTag: 'status',
-              tooltip: state.serverPort > 0
-                  ? 'Listening on port ${state.serverPort}'
-                  : 'Server running',
-              onPressed: () => showModalBottomSheet<void>(
-                context: context,
-                showDragHandle: true,
-                builder: (context) => Padding(
-                  padding: const EdgeInsets.fromLTRB(22, 4, 22, 22),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('FlowDrop is listening',
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleLarge
-                              ?.copyWith(fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 10),
-                      Text(
-                        state.serverPort > 0
-                            ? 'HTTPS server on port ${state.serverPort} · pinned client certificate required.'
-                            : 'HTTPS server running with a pinned client certificate.',
-                        style: TextStyle(
-                          fontSize: 13,
-                          height: 1.45,
-                          color: scheme.onSurface.withValues(alpha: 0.7),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      GlowButton(
-                        label: 'Done',
-                        tone: GlowTone.ghost,
-                        expanded: true,
-                        onPressed: () => Navigator.of(context).pop(),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              child: const Icon(Icons.lock_rounded),
-            )
-          : null,
+                child: const Icon(Icons.lock_rounded),
+              )
+            : null,
       ),
     );
   }

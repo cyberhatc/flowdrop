@@ -76,9 +76,7 @@ bool isPrivateIPv4(String address) {
   }
   final a = parts[0]!;
   final b = parts[1]!;
-  return a == 10 ||
-      (a == 172 && b >= 16 && b <= 31) ||
-      (a == 192 && b == 168);
+  return a == 10 || (a == 172 && b >= 16 && b <= 31) || (a == 192 && b == 168);
 }
 
 /// The `/24` broadcast address for an IPv4 address, used by the UDP beacon.

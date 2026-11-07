@@ -11,10 +11,7 @@ Future<bool> revealInFolder(String filePath) async {
   if (filePath.isEmpty) return false;
   try {
     if (Platform.isWindows) {
-      await Process.run('explorer', [
-        '/select,',
-        filePath,
-      ]);
+      await Process.run('explorer', ['/select,', filePath]);
       return true;
     }
     if (Platform.isLinux) {
@@ -30,10 +27,7 @@ Future<bool> revealInFolder(String filePath) async {
     return false;
   }
   // Mobile: opening a file:// URL at least tries the system viewer.
-  return launchUrl(
-    Uri.file(filePath),
-    mode: LaunchMode.externalApplication,
-  );
+  return launchUrl(Uri.file(filePath), mode: LaunchMode.externalApplication);
 }
 
 /// Opens an http(s) link in the system browser. Non-URLs return false.

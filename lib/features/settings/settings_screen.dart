@@ -111,8 +111,8 @@ class SettingsScreen extends ConsumerWidget {
               value: settings.useMdns,
               onChanged: settings.discoveryEnabled
                   ? (value) => controller.applySettings(
-                        settings.copyWith(useMdns: value),
-                      )
+                      settings.copyWith(useMdns: value),
+                    )
                   : null,
             ),
             const SizedBox(height: 4),
@@ -312,14 +312,19 @@ class SettingsScreen extends ConsumerWidget {
                                 entry.data,
                                 maxLines: 3,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 12.5, height: 1.4),
+                                style: const TextStyle(
+                                  fontSize: 12.5,
+                                  height: 1.4,
+                                ),
                               ),
                               const SizedBox(height: 4),
                               Text(
                                 '${entry.outgoing ? '→' : '←'} ${entry.fromName} · ${TimeOfDay.fromDateTime(entry.at.toLocal()).format(context)}',
                                 style: TextStyle(
                                   fontSize: 10.5,
-                                  color: scheme.onSurface.withValues(alpha: 0.5),
+                                  color: scheme.onSurface.withValues(
+                                    alpha: 0.5,
+                                  ),
                                 ),
                               ),
                             ],
@@ -399,9 +404,7 @@ class SettingsScreen extends ConsumerWidget {
                             ClipboardData(text: fingerprint),
                           );
                           messenger.showSnackBar(
-                            const SnackBar(
-                              content: Text('Fingerprint copied'),
-                            ),
+                            const SnackBar(content: Text('Fingerprint copied')),
                           );
                         },
                   icon: const Icon(Icons.copy_rounded, size: 15),
@@ -448,8 +451,9 @@ class SettingsScreen extends ConsumerWidget {
                     : '${state.history.length} entries, stored on this device',
               ),
               trailing: TextButton(
-                onPressed:
-                    state.history.isEmpty ? null : controller.clearHistory,
+                onPressed: state.history.isEmpty
+                    ? null
+                    : controller.clearHistory,
                 child: const Text('Clear'),
               ),
             ),
@@ -577,8 +581,9 @@ class _NameEditor extends StatefulWidget {
 }
 
 class _NameEditorState extends State<_NameEditor> {
-  late final TextEditingController _controller =
-      TextEditingController(text: widget.initialName);
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialName,
+  );
   bool _dirty = false;
 
   @override
@@ -591,9 +596,8 @@ class _NameEditorState extends State<_NameEditor> {
     await widget.onSave(_controller.text);
     if (!mounted) return;
     setState(() => _dirty = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Device name updated')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Device name updated')));
   }
 
   @override

@@ -53,11 +53,7 @@ class HomeScreen extends ConsumerWidget {
                 );
                 if (!wide) {
                   return Column(
-                    children: [
-                      radar,
-                      const SizedBox(height: 18),
-                      side,
-                    ],
+                    children: [radar, const SizedBox(height: 18), side],
                   );
                 }
                 return Row(
@@ -75,10 +71,7 @@ class HomeScreen extends ConsumerWidget {
               children: [
                 const Text(
                   'Nearby devices',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(width: 10),
                 if (peers.isNotEmpty)
@@ -126,7 +119,8 @@ class HomeScreen extends ConsumerWidget {
 
   bool _isTrusted(AppState state, Peer peer) {
     return state.trustedDevices.any(
-      (device) => fingerprintsEqual(device.fingerprint, peer.device.fingerprint),
+      (device) =>
+          fingerprintsEqual(device.fingerprint, peer.device.fingerprint),
     );
   }
 }
@@ -151,13 +145,10 @@ class _Header extends StatelessWidget {
                 children: [
                   GradientHeadline(
                     state.deviceName,
-                    style: Theme.of(context)
-                        .textTheme
-                        .headlineMedium
-                        ?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.6,
-                        ),
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.6,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -182,7 +173,9 @@ class _Header extends StatelessWidget {
           runSpacing: 8,
           children: [
             StatusPill(
-              label: state.serverRunning ? 'Ready to receive' : 'Server offline',
+              label: state.serverRunning
+                  ? 'Ready to receive'
+                  : 'Server offline',
               color: state.serverRunning ? scheme.primary : scheme.error,
               icon: state.serverRunning
                   ? Icons.lock_rounded
@@ -192,17 +185,17 @@ class _Header extends StatelessWidget {
               label: state.settings.visibility == VisibilityMode.hidden
                   ? 'Hidden'
                   : state.settings.visibility == VisibilityMode.trustedOnly
-                      ? 'Trusted only'
-                      : state.settings.discoveryEnabled
-                          ? (state.udpRunning
-                              ? 'Discoverable'
-                              : 'Discovery blocked')
-                          : 'Invisible',
-              color: state.settings.visibility == VisibilityMode.hidden ||
+                  ? 'Trusted only'
+                  : state.settings.discoveryEnabled
+                  ? (state.udpRunning ? 'Discoverable' : 'Discovery blocked')
+                  : 'Invisible',
+              color:
+                  state.settings.visibility == VisibilityMode.hidden ||
                       !state.settings.discoveryEnabled
                   ? scheme.onSurface.withValues(alpha: 0.5)
                   : (state.udpRunning ? scheme.secondary : scheme.error),
-              icon: state.settings.visibility == VisibilityMode.hidden ||
+              icon:
+                  state.settings.visibility == VisibilityMode.hidden ||
                       !state.settings.discoveryEnabled
                   ? Icons.visibility_off_rounded
                   : Icons.wifi_tethering_rounded,
@@ -236,9 +229,9 @@ class _FingerprintChip extends StatelessWidget {
         onTap: () async {
           await Clipboard.setData(ClipboardData(text: fingerprint));
           if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Fingerprint copied')),
-            );
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('Fingerprint copied')));
           }
         },
         child: Container(
@@ -391,11 +384,7 @@ class _LocalNode extends StatelessWidget {
               ),
             ],
           ),
-          child: Icon(
-            Icons.devices_rounded,
-            color: scheme.primary,
-            size: 34,
-          ),
+          child: Icon(Icons.devices_rounded, color: scheme.primary, size: 34),
         ),
         const SizedBox(height: 6),
         Text(
@@ -467,8 +456,7 @@ class _PeerBubble extends StatelessWidget {
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
           ),
-          if (trusted)
-            Icon(Icons.verified_rounded, size: 11, color: tint),
+          if (trusted) Icon(Icons.verified_rounded, size: 11, color: tint),
         ],
       ),
     );
@@ -498,9 +486,7 @@ class _QuickActions extends StatelessWidget {
         children: [
           Text(
             'Connect',
-            style: Theme.of(context)
-                .textTheme
-                .titleMedium
+            style: Theme.of(context).textTheme.titleMedium
                 ?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 6),
@@ -580,7 +566,11 @@ class _QuickActions extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.info_outline_rounded, size: 16, color: scheme.error),
+                  Icon(
+                    Icons.info_outline_rounded,
+                    size: 16,
+                    color: scheme.error,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(

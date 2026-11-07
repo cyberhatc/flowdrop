@@ -56,8 +56,7 @@ class DiscoveryService {
     }
     if (useMdns) {
       final mdns = MdnsDiscoveryService(
-        onDevice: (device) =>
-            registry.upsert(device, source: PeerSource.mdns),
+        onDevice: (device) => registry.upsert(device, source: PeerSource.mdns),
         onError: onError,
       );
       _mdns = mdns;

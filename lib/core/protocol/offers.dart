@@ -19,12 +19,12 @@ class OfferedFile {
   final String? relativePath;
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'size': size,
-        'mime': mime,
-        if (relativePath != null) 'relativePath': relativePath,
-      };
+    'id': id,
+    'name': name,
+    'size': size,
+    'mime': mime,
+    if (relativePath != null) 'relativePath': relativePath,
+  };
 
   factory OfferedFile.fromJson(Map<String, dynamic> json) {
     final size = json['size'];
@@ -43,8 +43,9 @@ class OfferedFile {
       mime: json['mime'] is String
           ? json['mime'] as String
           : 'application/octet-stream',
-      relativePath:
-          json['relativePath'] is String ? json['relativePath'] as String : null,
+      relativePath: json['relativePath'] is String
+          ? json['relativePath'] as String
+          : null,
     );
   }
 }
@@ -67,12 +68,12 @@ class OfferRequest {
   int get fileCount => files.length;
 
   Map<String, dynamic> toJson() => {
-        'sessionId': sessionId,
-        'sender': sender.toJson(),
-        'text': text,
-        'files': files.map((f) => f.toJson()).toList(growable: false),
-        'totalSize': totalSize,
-      };
+    'sessionId': sessionId,
+    'sender': sender.toJson(),
+    'text': text,
+    'files': files.map((f) => f.toJson()).toList(growable: false),
+    'totalSize': totalSize,
+  };
 
   factory OfferRequest.fromJson(Map<String, dynamic> json) {
     final sessionId = json['sessionId'];
@@ -133,11 +134,11 @@ class OfferResponse {
   final Map<String, String> uploadUrls;
 
   Map<String, dynamic> toJson() => {
-        'accepted': accepted,
-        'sessionId': sessionId,
-        if (reason != null) 'reason': reason,
-        if (uploadUrls.isNotEmpty) 'uploadUrls': uploadUrls,
-      };
+    'accepted': accepted,
+    'sessionId': sessionId,
+    if (reason != null) 'reason': reason,
+    if (uploadUrls.isNotEmpty) 'uploadUrls': uploadUrls,
+  };
 
   factory OfferResponse.fromJson(Map<String, dynamic> json) {
     final accepted = json['accepted'];
@@ -169,10 +170,7 @@ class TextPayload {
   final DeviceInfo sender;
   final String text;
 
-  Map<String, dynamic> toJson() => {
-        'sender': sender.toJson(),
-        'text': text,
-      };
+  Map<String, dynamic> toJson() => {'sender': sender.toJson(), 'text': text};
 
   factory TextPayload.fromJson(Map<String, dynamic> json) {
     final sender = json['sender'];
@@ -203,11 +201,11 @@ class PairRequest {
   final bool alwaysTrust;
 
   Map<String, dynamic> toJson() => {
-        'token': token,
-        'device': device.toJson(),
-        'signature': signature,
-        'alwaysTrust': alwaysTrust,
-      };
+    'token': token,
+    'device': device.toJson(),
+    'signature': signature,
+    'alwaysTrust': alwaysTrust,
+  };
 
   factory PairRequest.fromJson(Map<String, dynamic> json) {
     final token = json['token'];
@@ -245,19 +243,20 @@ class PairResponse {
   final String? error;
 
   Map<String, dynamic> toJson() => {
-        'ok': ok,
-        'trusted': trusted,
-        if (device != null) 'device': device!.toJson(),
-        if (error != null) 'error': error,
-      };
+    'ok': ok,
+    'trusted': trusted,
+    if (device != null) 'device': device!.toJson(),
+    if (error != null) 'error': error,
+  };
 
   factory PairResponse.fromJson(Map<String, dynamic> json) {
     final device = json['device'];
     return PairResponse(
       ok: json['ok'] == true,
       trusted: json['trusted'] == true,
-      device:
-          device is Map<String, dynamic> ? DeviceInfo.fromJson(device) : null,
+      device: device is Map<String, dynamic>
+          ? DeviceInfo.fromJson(device)
+          : null,
       error: json['error'] is String ? json['error'] as String : null,
     );
   }
@@ -279,11 +278,11 @@ class FileStatus {
   final String state;
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'received': received,
-        'size': size,
-        'state': state,
-      };
+    'id': id,
+    'received': received,
+    'size': size,
+    'state': state,
+  };
 }
 
 class StatusResponse {
@@ -300,10 +299,10 @@ class StatusResponse {
   final List<FileStatus> files;
 
   Map<String, dynamic> toJson() => {
-        'sessionId': sessionId,
-        'state': state,
-        'files': files.map((f) => f.toJson()).toList(growable: false),
-      };
+    'sessionId': sessionId,
+    'state': state,
+    'files': files.map((f) => f.toJson()).toList(growable: false),
+  };
 }
 
 /// Server -> client realtime events delivered on `/v1/events`.
@@ -328,13 +327,12 @@ class ServerEvent {
     required String fileId,
     required int received,
     required int total,
-  }) =>
-      ServerEvent('progress', {
-        'sessionId': sessionId,
-        'fileId': fileId,
-        'received': received,
-        'total': total,
-      });
+  }) => ServerEvent('progress', {
+    'sessionId': sessionId,
+    'fileId': fileId,
+    'received': received,
+    'total': total,
+  });
   static ServerEvent completed(String sessionId, {List<String>? savedPaths}) =>
       ServerEvent('completed', {
         'sessionId': sessionId,
@@ -348,8 +346,7 @@ class ServerEvent {
   static ServerEvent clipboard({
     required String fingerprint,
     required String data,
-  }) =>
-      ServerEvent('clipboard', {'from': fingerprint, 'data': data});
+  }) => ServerEvent('clipboard', {'from': fingerprint, 'data': data});
   static ServerEvent ping() =>
       ServerEvent('ping', {'at': DateTime.now().millisecondsSinceEpoch});
 }

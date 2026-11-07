@@ -86,7 +86,8 @@ class AppController extends Notifier<AppState> {
       _identityStore = SecureIdentityStore();
 
       final support = await getApplicationSupportDirectory();
-      final downloads = await getDownloadsDirectory() ??
+      final downloads =
+          await getDownloadsDirectory() ??
           await getApplicationDocumentsDirectory();
 
       var settings = await _settingsStore.load();
@@ -99,7 +100,8 @@ class AppController extends Notifier<AppState> {
 
       _set(state.copyWith(loadingMessage: 'Creating your secure identity…'));
       final stored = await _identityStore!.load();
-      final identity = stored ??
+      final identity =
+          stored ??
           await DeviceIdentity.generate(
             name: settings.deviceName,
             platform: Platform.operatingSystem,
@@ -235,14 +237,14 @@ class AppController extends Notifier<AppState> {
   }
 
   DeviceInfo get _fallbackDevice => DeviceInfo(
-        id: _identity?.id ?? '',
-        name: state.settings.deviceName,
-        platform: Platform.operatingSystem,
-        publicKey: _identity?.publicKey ?? '',
-        fingerprint: _identity?.fingerprint ?? '',
-        addresses: _effectiveAddresses,
-        port: _server?.port ?? FlowDropProtocol.defaultPort,
-      );
+    id: _identity?.id ?? '',
+    name: state.settings.deviceName,
+    platform: Platform.operatingSystem,
+    publicKey: _identity?.publicKey ?? '',
+    fingerprint: _identity?.fingerprint ?? '',
+    addresses: _effectiveAddresses,
+    port: _server?.port ?? FlowDropProtocol.defaultPort,
+  );
 
   DeviceInfo? get _currentLocalDevice {
     final identity = _identity;
@@ -268,10 +270,7 @@ class AppController extends Notifier<AppState> {
   Future<void> refreshAddresses() async {
     await _refreshAddressesInternal();
     _set(
-      state.copyWith(
-        addresses: _addresses,
-        localDevice: _currentLocalDevice,
-      ),
+      state.copyWith(addresses: _addresses, localDevice: _currentLocalDevice),
     );
   }
 
@@ -412,11 +411,15 @@ class AppController extends Notifier<AppState> {
 
   void _handleClipboard(String fromFingerprint, String data) {
     final deviceId = state.trustedDevices
-        .where((device) => fingerprintsEqual(device.fingerprint, fromFingerprint))
+        .where(
+          (device) => fingerprintsEqual(device.fingerprint, fromFingerprint),
+        )
         .map((device) => device.deviceId)
         .firstOrNull;
     final trusted = state.trustedDevices
-        .where((device) => fingerprintsEqual(device.fingerprint, fromFingerprint))
+        .where(
+          (device) => fingerprintsEqual(device.fingerprint, fromFingerprint),
+        )
         .map((device) => device.name)
         .firstOrNull;
     // Register the payload with the guard first so the local watcher never
@@ -474,12 +477,9 @@ class AppController extends Notifier<AppState> {
           final file = File(path);
           final size = await file.length();
           final name = item.name ?? p.basename(path);
-          files.add(SendFile(
-            path: path,
-            name: name,
-            size: size,
-            mime: item.mime,
-          ));
+          files.add(
+            SendFile(path: path, name: name, size: size, mime: item.mime),
+          );
         } on Object {
           _banner('Skipped unreadable shared file: ${item.displayName}');
         }
@@ -657,7 +657,8 @@ class AppController extends Notifier<AppState> {
         final offeredFile = queue.removeAt(0);
         final local = filesById[offeredFile.id];
         if (local == null) continue;
-        final path = uploadUrls[offeredFile.id] ??
+        final path =
+            uploadUrls[offeredFile.id] ??
             '/v1/upload/$sessionId/${offeredFile.id}';
         await _uploadOne(
           client: client,
@@ -799,9 +800,7 @@ class AppController extends Notifier<AppState> {
           final sessionId = event.data['sessionId'];
           if (sessionId is String) {
             _markSession(sessionId, TransferState.cancelled);
-            unawaited(
-              _updateRecordState(sessionId, TransferState.cancelled),
-            );
+            unawaited(_updateRecordState(sessionId, TransferState.cancelled));
           }
         }
       case 'clipboard':
@@ -895,7 +894,10 @@ class AppController extends Notifier<AppState> {
       throw FlowDropException('not_ready', 'FlowDrop is still starting.');
     }
     if (host.trim().isEmpty) {
-      throw FlowDropException('bad_input', 'Enter the other device IP address.');
+      throw FlowDropException(
+        'bad_input',
+        'Enter the other device IP address.',
+      );
     }
     if (normalized.length < 16) {
       throw FlowDropException(
@@ -1026,7 +1028,9 @@ class AppController extends Notifier<AppState> {
         final renamed = identity.copyWith(name: next.deviceName.trim());
         _identity = renamed;
         await _identityStore?.save(renamed);
-        _set(state.copyWith(identity: renamed, localDevice: _currentLocalDevice));
+        _set(
+          state.copyWith(identity: renamed, localDevice: _currentLocalDevice),
+        );
       }
     }
 
@@ -1079,9 +1083,11 @@ class AppController extends Notifier<AppState> {
       final error = await sendClipboardTo(peer.device, data);
       if (error == null) sent++;
     }
-    _banner(sent > 0
-        ? 'Clipboard sent to $sent device${sent == 1 ? '' : 's'}'
-        : 'Clipboard sync failed — devices unreachable');
+    _banner(
+      sent > 0
+          ? 'Clipboard sent to $sent device${sent == 1 ? '' : 's'}'
+          : 'Clipboard sync failed — devices unreachable',
+    );
   }
 
   /// Manual quick action: sends the current OS clipboard straight to [peer]
@@ -1196,16 +1202,19 @@ class AppController extends Notifier<AppState> {
         _downloadDirectory = trimmed;
         _server?.downloadDirectory = trimmed;
       } else {
-        final downloads = await getDownloadsDirectory() ??
+        final downloads =
+            await getDownloadsDirectory() ??
             await getApplicationDocumentsDirectory();
         final resolved = p.join(downloads.path, 'FlowDrop');
         await Directory(resolved).create(recursive: true);
         _downloadDirectory = resolved;
         _server?.downloadDirectory = resolved;
       }
-      _banner(trimmed.isEmpty
-          ? 'Using the default Downloads folder'
-          : 'Saving incoming files to $trimmed');
+      _banner(
+        trimmed.isEmpty
+            ? 'Using the default Downloads folder'
+            : 'Saving incoming files to $trimmed',
+      );
     } on Object catch (error) {
       _banner('Could not use that folder: $error');
     }
@@ -1243,8 +1252,14 @@ class AppController extends Notifier<AppState> {
   /// sanitized filename derived from the sender name.
   Future<String?> saveTextAsFile(String text, String senderName) async {
     try {
-      final slug = sanitizeFileName(senderName).replaceAll(RegExp(r'\s+'), '-').toLowerCase();
-      final stamp = DateTime.now().toIso8601String().replaceAll(':', '-').split('.').first;
+      final slug = sanitizeFileName(senderName)
+          .replaceAll(RegExp(r'\s+'), '-')
+          .toLowerCase();
+      final stamp = DateTime.now()
+          .toIso8601String()
+          .replaceAll(':', '-')
+          .split('.')
+          .first;
       final name = sanitizeFileName('${slug}_${stamp.substring(11)}.txt');
       final file = File(p.join(_downloadDirectory, name));
       await file.writeAsString(text, flush: true);
@@ -1311,11 +1326,11 @@ class AppController extends Notifier<AppState> {
     TransferState next, {
     String? savedPath,
   }) async {
-    final index =
-        state.history.indexWhere((entry) => entry.id == sessionId);
+    final index = state.history.indexWhere((entry) => entry.id == sessionId);
     if (index < 0) return;
     final current = state.history[index];
-    final finished = next == TransferState.completed ||
+    final finished =
+        next == TransferState.completed ||
         next == TransferState.failed ||
         next == TransferState.cancelled ||
         next == TransferState.declined;
@@ -1337,8 +1352,9 @@ class AppController extends Notifier<AppState> {
 
   void _upsertSession(SessionProgress session) {
     final list = [...state.sessions];
-    final index =
-        list.indexWhere((entry) => entry.sessionId == session.sessionId);
+    final index = list.indexWhere(
+      (entry) => entry.sessionId == session.sessionId,
+    );
     if (index >= 0) {
       list[index] = session;
     } else {
@@ -1354,18 +1370,16 @@ class AppController extends Notifier<AppState> {
         .map(
           (file) => file.copyWith(
             state: next,
-            transferredBytes:
-                next == TransferState.completed ? file.totalBytes : null,
+            transferredBytes: next == TransferState.completed
+                ? file.totalBytes
+                : null,
           ),
         )
         .toList(growable: false);
     _upsertSession(session.copyWith(files: files, state: next));
   }
 
-  void _markSessionWithSavedPaths(
-    String sessionId,
-    List<String> savedPaths,
-  ) {
+  void _markSessionWithSavedPaths(String sessionId, List<String> savedPaths) {
     final session = _findSession(sessionId);
     if (session == null) return;
     final files = session.files

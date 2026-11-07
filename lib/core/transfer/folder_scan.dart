@@ -60,8 +60,10 @@ Future<FolderScanResult> scanFolder(
     return const FolderScanResult(entries: [], skipped: 0);
   }
 
-  await for (final entity
-      in rootDir.list(recursive: true, followLinks: false)) {
+  await for (final entity in rootDir.list(
+    recursive: true,
+    followLinks: false,
+  )) {
     if (entity is! File) continue;
     // list(followLinks: false) already excludes symlinked dirs, but a file
     // could itself be a symlink — skip it to avoid sending anything outside

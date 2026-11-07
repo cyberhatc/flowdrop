@@ -34,8 +34,9 @@ void main() {
       final relatives =
           result.entries.map((entry) => entry.relativePath).toList()..sort();
       expect(relatives, ['a.txt', 'trip/day1/a.jpg', 'trip/day2/b.jpg']);
-      final aJpg = result.entries
-          .firstWhere((entry) => entry.relativePath == 'trip/day1/a.jpg');
+      final aJpg = result.entries.firstWhere(
+        (entry) => entry.relativePath == 'trip/day1/a.jpg',
+      );
       expect(aJpg.size, 200);
       expect(await File(aJpg.fullPath).exists(), isTrue);
     });

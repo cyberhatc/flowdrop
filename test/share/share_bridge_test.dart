@@ -14,7 +14,8 @@ const _fakeDevice = DeviceInfo(
   name: 'Pixel 8',
   platform: 'android',
   publicKey: 'cHViag==',
-  fingerprint: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+  fingerprint:
+      'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
   addresses: ['192.168.1.20'],
   port: 53317,
 );
@@ -27,7 +28,13 @@ class _RecordingController extends AppController {
     ref.onDispose(() {});
     return AppState(
       ready: true,
-      peers: [Peer(device: _fakeDevice, lastSeen: DateTime.now(), source: PeerSource.udp)],
+      peers: [
+        Peer(
+          device: _fakeDevice,
+          lastSeen: DateTime.now(),
+          source: PeerSource.udp,
+        ),
+      ],
       sessions: const [],
     );
   }
@@ -51,8 +58,15 @@ void main() {
   group('ShareBridge', () {
     test('initial share is ingested with send-capable shape', () async {
       final media = [
-        SharedMediaFile(path: '/tmp/shared.txt', type: SharedMediaType.file, mimeType: 'text/plain'),
-        SharedMediaFile(path: 'https://example.com/page', type: SharedMediaType.url),
+        SharedMediaFile(
+          path: '/tmp/shared.txt',
+          type: SharedMediaType.file,
+          mimeType: 'text/plain',
+        ),
+        SharedMediaFile(
+          path: 'https://example.com/page',
+          type: SharedMediaType.url,
+        ),
       ];
       ReceiveSharingIntent.setMockValues(
         initialMedia: media,
@@ -65,8 +79,9 @@ void main() {
         ],
       );
       addTearDown(container.dispose);
-      final controller = container.read(appControllerProvider.notifier)
-          as _RecordingController;
+      final controller = container.read(
+        appControllerProvider.notifier,
+      ) as _RecordingController;
       final bridge = ShareBridge(controller);
       addTearDown(bridge.dispose);
 
@@ -91,8 +106,9 @@ void main() {
         ],
       );
       addTearDown(container.dispose);
-      final controller = container.read(appControllerProvider.notifier)
-          as _RecordingController;
+      final controller = container.read(
+        appControllerProvider.notifier,
+      ) as _RecordingController;
       final bridge = ShareBridge(controller);
       addTearDown(bridge.dispose);
 
@@ -115,8 +131,9 @@ void main() {
         await streamController.close();
         container.dispose();
       });
-      final controller = container.read(appControllerProvider.notifier)
-          as _RecordingController;
+      final controller = container.read(
+        appControllerProvider.notifier,
+      ) as _RecordingController;
       final bridge = ShareBridge(controller);
       addTearDown(bridge.dispose);
 

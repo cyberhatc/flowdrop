@@ -183,8 +183,8 @@ class _HistoryTile extends ConsumerWidget {
     final scheme = Theme.of(context).colorScheme;
     final controller = ref.read(appControllerProvider.notifier);
     final when = DateFormat.yMMMd().add_Hms().format(
-          (record.finishedAt ?? record.startedAt).toLocal(),
-        );
+      (record.finishedAt ?? record.startedAt).toLocal(),
+    );
 
     await showModalBottomSheet<void>(
       context: context,
@@ -205,9 +205,8 @@ class _HistoryTile extends ConsumerWidget {
               children: [
                 Text(
                   '${record.direction == TransferDirection.sent ? 'Sent to' : 'Received from'} ${record.peerName}',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                  style: Theme.of(context).textTheme.titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -267,10 +266,7 @@ class _HistoryTile extends ConsumerWidget {
                     record.textPreview!.isNotEmpty) ...[
                   const Text(
                     'Message',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 6),
                   Container(
@@ -361,7 +357,11 @@ class _EmptyHistory extends StatelessWidget {
       child: Column(
         children: [
           const SizedBox(height: 14),
-          GlowIcon(icon: Icons.history_rounded, color: scheme.primary, size: 54),
+          GlowIcon(
+            icon: Icons.history_rounded,
+            color: scheme.primary,
+            size: 54,
+          ),
           const SizedBox(height: 16),
           const Text(
             'No history yet',

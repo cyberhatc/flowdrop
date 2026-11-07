@@ -85,17 +85,17 @@ class AppSettings {
   }
 
   Map<String, dynamic> toJson() => {
-        'deviceName': deviceName,
-        'themeMode': themeMode.name,
-        'accent': accent.name,
-        'autoAcceptTrusted': autoAcceptTrusted,
-        'useMdns': useMdns,
-        'discoveryEnabled': discoveryEnabled,
-        'clipboardSync': clipboardSync,
-        'receiveDirectory': receiveDirectory,
-        'onboardingDone': onboardingDone,
-        'visibility': visibility.name,
-      };
+    'deviceName': deviceName,
+    'themeMode': themeMode.name,
+    'accent': accent.name,
+    'autoAcceptTrusted': autoAcceptTrusted,
+    'useMdns': useMdns,
+    'discoveryEnabled': discoveryEnabled,
+    'clipboardSync': clipboardSync,
+    'receiveDirectory': receiveDirectory,
+    'onboardingDone': onboardingDone,
+    'visibility': visibility.name,
+  };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
     return AppSettings(

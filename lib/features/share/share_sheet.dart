@@ -69,11 +69,7 @@ class _ShareSheetState extends ConsumerState<_ShareSheet> {
     if (!mounted) return;
     navigator.pop();
     messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          error ?? 'Shared to ${peer.name}',
-        ),
-      ),
+      SnackBar(content: Text(error ?? 'Shared to ${peer.name}')),
     );
   }
 
@@ -107,9 +103,7 @@ class _ShareSheetState extends ConsumerState<_ShareSheet> {
                     children: [
                       Text(
                         'Send shared items',
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleLarge
+                        style: Theme.of(context).textTheme.titleLarge
                             ?.copyWith(fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(height: 2),
@@ -227,8 +221,9 @@ class _ShareSheetState extends ConsumerState<_ShareSheet> {
               icon: Icons.send_rounded,
               expanded: true,
               busy: _busy,
-              onPressed:
-                  (_selectedPeerId != null && !_busy) ? () => _send() : null,
+              onPressed: (_selectedPeerId != null && !_busy)
+                  ? () => _send()
+                  : null,
             ),
           ],
         ),

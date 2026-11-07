@@ -26,7 +26,8 @@ class MdnsDiscoveryService {
   bool _started = false;
   bool _scanning = false;
 
-  static const String _service = '${FlowDropProtocol.serviceType}.'
+  static const String _service =
+      '${FlowDropProtocol.serviceType}.'
       '${FlowDropProtocol.serviceDomain}';
 
   bool get isRunning => _started;

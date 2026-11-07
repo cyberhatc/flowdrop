@@ -16,12 +16,11 @@ void main() {
     List<String> labelsFor(
       Map<ShortcutActivator, VoidCallback> bindings,
       bool Function(SingleActivator) test,
-    ) =>
-        bindings.keys
-            .whereType<SingleActivator>()
-            .where(test)
-            .map((activator) => activator.trigger.keyLabel)
-            .toList();
+    ) => bindings.keys
+        .whereType<SingleActivator>()
+        .where(test)
+        .map((activator) => activator.trigger.keyLabel)
+        .toList();
 
     test('Windows bindings use Ctrl', () {
       final bindings = build(TargetPlatform.windows);
@@ -41,9 +40,9 @@ void main() {
 
     test('non-macOS has no Meta bindings', () {
       final bindings = build(TargetPlatform.linux);
-      final hasMeta = bindings.keys
-          .whereType<SingleActivator>()
-          .any((activator) => activator.meta);
+      final hasMeta = bindings.keys.whereType<SingleActivator>().any(
+        (activator) => activator.meta,
+      );
       expect(hasMeta, isFalse);
     });
 

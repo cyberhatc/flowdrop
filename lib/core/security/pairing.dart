@@ -36,9 +36,9 @@ class PairingTokenManager {
     int maxAttemptsPerMinute = FlowDropProtocol.pairingAttemptsPerMinute,
     Random? random,
     DateTime Function()? clock,
-  })  : _maxAttempts = maxAttemptsPerMinute,
-        _random = random ?? Random.secure(),
-        _clock = clock ?? DateTime.now;
+  }) : _maxAttempts = maxAttemptsPerMinute,
+       _random = random ?? Random.secure(),
+       _clock = clock ?? DateTime.now;
 
   final Duration ttl;
   final int _maxAttempts;
@@ -61,7 +61,11 @@ class PairingTokenManager {
     return token;
   }
 
-  PairingResult redeem(String token, {String clientIp = 'unknown', DateTime? now}) {
+  PairingResult redeem(
+    String token, {
+    String clientIp = 'unknown',
+    DateTime? now,
+  }) {
     final at = now ?? _clock();
     // Check the token *before* pruning so an expired token reports
     // PairingResult.expired instead of vanishing into PairingResult.invalid.

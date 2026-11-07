@@ -59,10 +59,7 @@ void main() {
         () => sanitizeRelativePath(r'C:\evil.txt'),
         throwsA(isA<FormatException>()),
       );
-      expect(
-        () => sanitizeRelativePath(''),
-        throwsA(isA<FormatException>()),
-      );
+      expect(() => sanitizeRelativePath(''), throwsA(isA<FormatException>()));
     });
 
     test('sanitizes reserved segments instead of keeping them', () {
@@ -72,10 +69,7 @@ void main() {
 
   group('dedupeFileName', () {
     test('adds numbered suffixes', () {
-      expect(
-        dedupeFileName('photo.jpg', {'photo.jpg'}),
-        'photo (1).jpg',
-      );
+      expect(dedupeFileName('photo.jpg', {'photo.jpg'}), 'photo (1).jpg');
       expect(
         dedupeFileName('photo.jpg', {'photo.jpg', 'photo (1).jpg'}),
         'photo (2).jpg',

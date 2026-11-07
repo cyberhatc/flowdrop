@@ -26,8 +26,14 @@ Future<void> main(List<String> args) async {
   final sizeMb = int.tryParse(args.isEmpty ? '64' : args.first) ?? 64;
   final sizeBytes = sizeMb * 1024 * 1024;
 
-  final sender = await DeviceIdentity.generate(name: 'BenchSender', platform: 'bench');
-  final receiver = await DeviceIdentity.generate(name: 'BenchReceiver', platform: 'bench');
+  final sender = await DeviceIdentity.generate(
+    name: 'BenchSender',
+    platform: 'bench',
+  );
+  final receiver = await DeviceIdentity.generate(
+    name: 'BenchReceiver',
+    platform: 'bench',
+  );
 
   final tempRoot = await Directory.systemTemp.createTemp('flowdrop-bench');
   final downloads = Directory('${tempRoot.path}/downloads');
@@ -52,10 +58,8 @@ Future<void> main(List<String> args) async {
     onOffer: (_, __, ___) async => true,
     trustStore: InMemoryTrustStore(),
     tokenManager: PairingTokenManager(),
-    deviceInfoBuilder: (port) => receiver.toDeviceInfo(
-      addresses: const ['127.0.0.1'],
-      port: port,
-    ),
+    deviceInfoBuilder: (port) =>
+        receiver.toDeviceInfo(addresses: const ['127.0.0.1'], port: port),
   );
   await server.start(preferredPort: 0);
 
@@ -92,8 +96,10 @@ Future<void> main(List<String> args) async {
     final elapsed = stopwatch.elapsedMilliseconds / 1000;
     final mbs = elapsed > 0 ? (sizeBytes / (1024 * 1024)) / elapsed : 0;
     final checksumOk = result.sha256 == expectedSha;
-    print('size=${sizeMb}MiB elapsed=${elapsed.toStringAsFixed(2)}s '
-        'throughput=${mbs.toStringAsFixed(1)}MB/s checksum=$checksumOk');
+    print(
+      'size=${sizeMb}MiB elapsed=${elapsed.toStringAsFixed(2)}s '
+      'throughput=${mbs.toStringAsFixed(1)}MB/s checksum=$checksumOk',
+    );
     if (!checksumOk) {
       exitCode = 1;
     }

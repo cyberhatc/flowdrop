@@ -23,11 +23,16 @@ void main() {
     });
 
     test('fingerprintsEqual is exact after normalization', () {
-      final a = 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2';
+      final a =
+          'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2';
       expect(a.length, 64);
-      final spaced =
-          a.toUpperCase().split('').asMap().entries.map((e) =>
-              '${e.value}${e.key % 4 == 3 ? ' ' : ''}').join();
+      final spaced = a
+          .toUpperCase()
+          .split('')
+          .asMap()
+          .entries
+          .map((e) => '${e.value}${e.key % 4 == 3 ? ' ' : ''}')
+          .join();
       expect(fingerprintsEqual(a, spaced), isTrue);
       expect(fingerprintsEqual(a, '${a.substring(0, 63)}0'), isFalse);
       expect(fingerprintsEqual(a, a.substring(0, 32)), isFalse);
@@ -48,14 +53,14 @@ void main() {
 
   group('QrPayload', () {
     QrPayload sample() => QrPayload(
-          deviceId: 'dev-1',
-          name: 'My Phone',
-          addresses: const ['192.168.1.5', '192.168.1.6'],
-          port: FlowDropProtocol.defaultPort,
-          fingerprint: 'a' * 64,
-          token: 'token-abc',
-          expiresAt: DateTime.now().add(const Duration(seconds: 120)),
-        );
+      deviceId: 'dev-1',
+      name: 'My Phone',
+      addresses: const ['192.168.1.5', '192.168.1.6'],
+      port: FlowDropProtocol.defaultPort,
+      fingerprint: 'a' * 64,
+      token: 'token-abc',
+      expiresAt: DateTime.now().add(const Duration(seconds: 120)),
+    );
 
     test('encode/parse round-trips', () {
       final payload = sample();
@@ -128,16 +133,22 @@ void main() {
       final manager = PairingTokenManager();
       final token = manager.issue();
       expect(token.value.length, 24);
-      expect(manager.redeem(token.value, clientIp: '1.2.3.4'),
-          PairingResult.ok);
-      expect(manager.redeem(token.value, clientIp: '1.2.3.4'),
-          PairingResult.used);
+      expect(
+        manager.redeem(token.value, clientIp: '1.2.3.4'),
+        PairingResult.ok,
+      );
+      expect(
+        manager.redeem(token.value, clientIp: '1.2.3.4'),
+        PairingResult.used,
+      );
     });
 
     test('invalid tokens are rejected', () {
       final manager = PairingTokenManager();
-      expect(manager.redeem('nope', clientIp: '1.2.3.4'),
-          PairingResult.invalid);
+      expect(
+        manager.redeem('nope', clientIp: '1.2.3.4'),
+        PairingResult.invalid,
+      );
     });
 
     test('expired tokens are rejected', () {
@@ -145,27 +156,39 @@ void main() {
       final at = DateTime(2024, 1, 1, 12);
       final token = manager.issue(now: at);
       expect(
-        manager.redeem(token.value,
-            clientIp: '1.2.3.4', now: at.add(const Duration(minutes: 3))),
+        manager.redeem(
+          token.value,
+          clientIp: '1.2.3.4',
+          now: at.add(const Duration(minutes: 3)),
+        ),
         PairingResult.expired,
       );
     });
 
     test('rate limits per IP', () {
-      final manager =
-          PairingTokenManager(maxAttemptsPerMinute: 3);
+      final manager = PairingTokenManager(maxAttemptsPerMinute: 3);
       final at = DateTime(2024, 1, 1, 12);
-      expect(manager.redeem('x', clientIp: '9.9.9.9', now: at),
-          PairingResult.invalid);
-      expect(manager.redeem('x', clientIp: '9.9.9.9', now: at),
-          PairingResult.invalid);
-      expect(manager.redeem('x', clientIp: '9.9.9.9', now: at),
-          PairingResult.invalid);
-      expect(manager.redeem('x', clientIp: '9.9.9.9', now: at),
-          PairingResult.rateLimited);
+      expect(
+        manager.redeem('x', clientIp: '9.9.9.9', now: at),
+        PairingResult.invalid,
+      );
+      expect(
+        manager.redeem('x', clientIp: '9.9.9.9', now: at),
+        PairingResult.invalid,
+      );
+      expect(
+        manager.redeem('x', clientIp: '9.9.9.9', now: at),
+        PairingResult.invalid,
+      );
+      expect(
+        manager.redeem('x', clientIp: '9.9.9.9', now: at),
+        PairingResult.rateLimited,
+      );
       // Other IPs are unaffected.
-      expect(manager.redeem('x', clientIp: '8.8.8.8', now: at),
-          PairingResult.invalid);
+      expect(
+        manager.redeem('x', clientIp: '8.8.8.8', now: at),
+        PairingResult.invalid,
+      );
     });
   });
 }

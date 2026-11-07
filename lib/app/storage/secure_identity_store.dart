@@ -10,7 +10,7 @@ import '../../core/security/identity.dart';
 /// Linux: libsecret. Nothing here is ever written to shared preferences.
 class SecureIdentityStore {
   SecureIdentityStore([FlutterSecureStorage? storage])
-      : _storage = storage ?? const FlutterSecureStorage();
+    : _storage = storage ?? const FlutterSecureStorage();
 
   static const String _key = 'flowdrop.identity.v1';
 
@@ -31,7 +31,10 @@ class SecureIdentityStore {
   }
 
   Future<void> save(DeviceIdentity identity) async {
-    await _storage.write(key: _key, value: jsonEncode(identity.toStorageJson()));
+    await _storage.write(
+      key: _key,
+      value: jsonEncode(identity.toStorageJson()),
+    );
   }
 
   Future<void> delete() async {

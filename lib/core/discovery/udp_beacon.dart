@@ -71,8 +71,7 @@ class UdpBeaconService {
         onError?.call(error);
       }
 
-      _subscription =
-          socket.listen((event) => _handleEvent(socket, event));
+      _subscription = socket.listen((event) => _handleEvent(socket, event));
       if (announce) {
         _timer = Timer.periodic(interval, (_) => sendOnce());
         await sendOnce();

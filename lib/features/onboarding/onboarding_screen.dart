@@ -129,8 +129,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                                   : scheme.onSurface.withValues(alpha: 0.25),
                             ),
                           ),
-                          if (i != _slides.length - 1)
-                            const SizedBox(width: 6),
+                          if (i != _slides.length - 1) const SizedBox(width: 6),
                         ],
                       ],
                     ),
@@ -209,9 +208,7 @@ class _SlideBody extends StatelessWidget {
           const SizedBox(height: 24),
           GradientHeadline(
             slide.title,
-            style: Theme.of(context)
-                .textTheme
-                .headlineMedium
+            style: Theme.of(context).textTheme.headlineMedium
                 ?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.4),
           ),
           const SizedBox(height: 12),

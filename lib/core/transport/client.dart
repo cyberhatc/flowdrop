@@ -53,10 +53,10 @@ class FlowDropClient {
     required this.identity,
     required this.localDevice,
     required String expectedFingerprint,
-  })  : host = host,
-        port = port,
-        expectedFingerprint = normalizeFingerprint(expectedFingerprint),
-        _base = Uri(scheme: 'https', host: host, port: port) {
+  }) : host = host,
+       port = port,
+       expectedFingerprint = normalizeFingerprint(expectedFingerprint),
+       _base = Uri(scheme: 'https', host: host, port: port) {
     _http = createPinnedHttpClient(
       expectedFingerprint: expectedFingerprint,
       connectionTimeout: const Duration(seconds: 8),
@@ -159,8 +159,7 @@ class FlowDropClient {
             sent += chunk.length;
             final now = DateTime.now();
             if (onProgress != null &&
-                now.difference(lastEmit) >=
-                    const Duration(milliseconds: 100)) {
+                now.difference(lastEmit) >= const Duration(milliseconds: 100)) {
               lastEmit = now;
               onProgress(sent, file.size);
             }

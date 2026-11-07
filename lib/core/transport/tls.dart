@@ -45,10 +45,10 @@ HttpClient createPinnedHttpClient({
     ..idleTimeout = idleTimeout;
   client.badCertificateCallback =
       (X509Certificate certificate, String host, int port) {
-    final actual = fingerprintFromDer(certificate.der);
-    return actual == expected ||
-        (expected.length < 64 && actual.startsWith(expected));
-  };
+        final actual = fingerprintFromDer(certificate.der);
+        return actual == expected ||
+            (expected.length < 64 && actual.startsWith(expected));
+      };
   return client;
 }
 
@@ -64,9 +64,9 @@ Future<String> fetchCertificateFingerprint({
   final client = HttpClient()..connectionTimeout = timeout;
   client.badCertificateCallback =
       (X509Certificate certificate, String host, int port) {
-    captured = fingerprintFromDer(certificate.der);
-    return true;
-  };
+        captured = fingerprintFromDer(certificate.der);
+        return true;
+      };
   try {
     final request = await client
         .getUrl(Uri(scheme: 'https', host: host, port: port, path: '/v1/info'))
