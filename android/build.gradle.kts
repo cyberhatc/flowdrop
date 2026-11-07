@@ -1,19 +1,24 @@
 // All plugins default to different JVM targets (1.8 vs 17 vs 25)
-// which recent AGP refuses to build. Force 17 everywhere — both the
-// android extension (what AGP reads when it configures JavaCompile
-// tasks) and the Kotlin compilerOptions (KGP reads this, not the
-// task's bare jvmTarget field).
+// which recent AGP refuses to build. Force 17 everywhere.
+// The android extension's compileOptions are what AGP reads when it
+// configures JavaCompile tasks, so set them via reflection here — the
+// Kotlin DSL does not expose them on the generic extension type.
 gradle.projectsEvaluated {
     allprojects {
         afterEvaluate {
-            val android = extensions.findByName("android")
-            if (android is com.android.build.api.dsl.CommonExtension<*, *, *, *>) {
-                @Suppress("DEPRECATION")
-                android.compileOptions.sourceCompatibility =
-                    JavaVersion.VERSION_17
-                @Suppress("DEPRECATION")
-                android.compileOptions.targetCompatibility =
-                    JavaVersion.VERSION_17
+            try {
+                val android = extensions.findByName("android")
+                val compileOptions = android?.javaClass
+                    ?.getMethod("getCompileOptions")
+                    ?.invoke(android)
+                compileOptions?.javaClass
+                    ?.getMethod("setSourceCompatibility", String::class.java)
+                    ?.invoke(compileOptions, "17")
+                compileOptions?.javaClass
+                    ?.getMethod("setTargetCompatibility", String::class.java)
+                    ?.invoke(compileOptions, "17")
+            } catch (_: Exception) {
+                // Not an Android module — nothing to do.
             }
             tasks.withType<JavaCompile>().configureEach {
                 sourceCompatibility = JavaVersion.VERSION_17.toString()
