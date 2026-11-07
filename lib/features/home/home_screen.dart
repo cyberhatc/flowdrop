@@ -48,6 +48,7 @@ class HomeScreen extends ConsumerWidget {
                   state: state,
                   hasPeers: peers.isNotEmpty,
                   onRefresh: controller.refreshNearby,
+                  onSendClipboard: controller.pushClipboardNow,
                 );
                 if (!wide) {
                   return Column(
@@ -470,11 +471,13 @@ class _QuickActions extends StatelessWidget {
     required this.state,
     required this.hasPeers,
     required this.onRefresh,
+    required this.onSendClipboard,
   });
 
   final AppState state;
   final bool hasPeers;
   final Future<void> Function() onRefresh;
+  final Future<void> Function() onSendClipboard;
 
   @override
   Widget build(BuildContext context) {
@@ -524,6 +527,14 @@ class _QuickActions extends StatelessWidget {
             tone: GlowTone.ghost,
             expanded: true,
             onPressed: () => onRefresh(),
+          ),
+          const SizedBox(height: 10),
+          GlowButton(
+            label: 'Send clipboard to nearby',
+            icon: Icons.content_paste_rounded,
+            tone: GlowTone.ghost,
+            expanded: true,
+            onPressed: () => onSendClipboard(),
           ),
           const SizedBox(height: 18),
           const Divider(height: 1),

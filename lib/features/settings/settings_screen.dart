@@ -213,6 +213,108 @@ class SettingsScreen extends ConsumerWidget {
         ),
         const SizedBox(height: 18),
         _SettingsSection(
+          title: 'Clipboard',
+          children: [
+            SwitchListTile.adaptive(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Auto-sync clipboard to nearby devices'),
+              subtitle: const Text(
+                'Copies show up on paired devices within seconds. Values '
+                'received from a peer are never re-sent (loop prevention). '
+                'Only trusted devices can sync.',
+              ),
+              value: settings.clipboardSync,
+              onChanged: (value) => controller.applySettings(
+                settings.copyWith(clipboardSync: value),
+              ),
+            ),
+            const SizedBox(height: 8),
+            GlowButton(
+              label: 'Push clipboard now',
+              icon: Icons.content_paste_rounded,
+              tone: GlowTone.ghost,
+              expanded: true,
+              onPressed: controller.pushClipboardNow,
+            ),
+            if (state.clipboardHistory.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  const _RowLabel('Recent'),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: controller.clearClipboardHistory,
+                    child: const Text('Clear'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              for (final entry in state.clipboardHistory)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      color: scheme.primary.withValues(alpha: 0.05),
+                      border: Border.all(
+                        color: scheme.primary.withValues(alpha: 0.14),
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                entry.data,
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 12.5, height: 1.4),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${entry.outgoing ? '→' : '←'} ${entry.fromName} · ${TimeOfDay.fromDateTime(entry.at.toLocal()).format(context)}',
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  color: scheme.onSurface.withValues(alpha: 0.5),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          tooltip: 'Copy',
+                          onPressed: () async {
+                            await Clipboard.setData(
+                              ClipboardData(text: entry.data),
+                            );
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Copied to clipboard'),
+                                ),
+                              );
+                            }
+                          },
+                          icon: const Icon(Icons.copy_rounded, size: 16),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 18),
+        _SettingsSection(
           title: 'Security',
           children: [
             _RowLabel('Certificate fingerprint'),

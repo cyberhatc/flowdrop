@@ -3,11 +3,13 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:collection/collection.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../core/clipboard/clipboard_sync.dart';
 import '../../core/discovery/discovery_service.dart';
 import '../../core/discovery/network_interfaces.dart';
 import '../../core/discovery/peer.dart';
@@ -55,6 +57,13 @@ class AppController extends Notifier<AppState> {
 
   StreamSubscription<List<Peer>>? _peerSubscription;
   Timer? _addressTimer;
+
+  // Clipboard sync (opt-in). The watcher polls the OS clipboard; the guard
+  // remembers remote payloads so received values are never re-pushed.
+  final ClipboardSyncGuard _clipboardGuard = ClipboardSyncGuard();
+  Timer? _clipboardTimer;
+  bool _clipboardSyncing = false;
+
   bool _initialising = false;
   bool _disposed = false;
 
@@ -132,6 +141,7 @@ class AppController extends Notifier<AppState> {
         const Duration(seconds: 20),
         (_) => unawaited(refreshAddresses()),
       );
+      syncClipboardWatcher();
     } on Object catch (error) {
       _set(
         state.copyWith(
@@ -397,14 +407,36 @@ class AppController extends Notifier<AppState> {
   }
 
   void _handleClipboard(String fromFingerprint, String data) {
+    final deviceId = state.trustedDevices
+        .where((device) => fingerprintsEqual(device.fingerprint, fromFingerprint))
+        .map((device) => device.deviceId)
+        .firstOrNull;
     final trusted = state.trustedDevices
         .where((device) => fingerprintsEqual(device.fingerprint, fromFingerprint))
         .map((device) => device.name)
         .firstOrNull;
+    // Register the payload with the guard first so the local watcher never
+    // re-pushes a value that came from a peer (loop prevention).
+    _clipboardGuard.rememberRemote(
+      ClipboardEvent(
+        data: data,
+        originDeviceId: deviceId ?? fromFingerprint,
+        createdAt: DateTime.now(),
+        originFingerprint: fromFingerprint,
+      ),
+    );
     _set(
       state.copyWith(
         clipboardText: data,
         clipboardFrom: trusted ?? 'a paired device',
+        clipboardHistory: [
+          ClipboardEntry(
+            data: data,
+            fromName: trusted ?? 'a paired device',
+            at: DateTime.now(),
+          ),
+          ...state.clipboardHistory,
+        ].take(20).toList(growable: false),
       ),
     );
     _banner('Clipboard received from ${trusted ?? 'a paired device'}');
@@ -900,6 +932,15 @@ class AppController extends Notifier<AppState> {
     _banner('Device removed');
   }
 
+  /// Starts/stops the clipboard watcher based on the current setting.
+  void syncClipboardWatcher() {
+    if (state.settings.clipboardSync) {
+      _startClipboardSync();
+    } else {
+      _stopClipboardSync();
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Settings and housekeeping
   // ---------------------------------------------------------------------------
@@ -923,6 +964,110 @@ class AppController extends Notifier<AppState> {
     if (next.discoveryEnabled != previous.discoveryEnabled ||
         next.useMdns != previous.useMdns) {
       await _startDiscovery();
+    }
+
+    if (next.clipboardSync != previous.clipboardSync) {
+      if (next.clipboardSync) {
+        _startClipboardSync();
+      } else {
+        _stopClipboardSync();
+      }
+    }
+  }
+
+  /// Pushes the current OS clipboard to every currently-discovered peer that
+  /// can be reached. Used by the manual quick action and by sync ticks.
+  Future<void> pushClipboardNow() async {
+    final data = await _readClipboardText();
+    if (data == null || data.trim().isEmpty) return;
+    _recordOutgoingClipboard(data);
+    final peers = state.peers
+        .where((peer) => peer.device.addresses.isNotEmpty)
+        .toList();
+    if (peers.isEmpty) {
+      _banner('No nearby devices to sync to');
+      return;
+    }
+    var sent = 0;
+    for (final peer in peers) {
+      final error = await sendClipboardTo(peer.device, data);
+      if (error == null) sent++;
+    }
+    _banner(sent > 0
+        ? 'Clipboard sent to $sent device${sent == 1 ? '' : 's'}'
+        : 'Clipboard sync failed — devices unreachable');
+  }
+
+  /// Manual quick action: sends the current OS clipboard straight to [peer]
+  /// without requiring the sync toggle.
+  Future<String?> sendCurrentClipboardTo(DeviceInfo peer) async {
+    final data = await _readClipboardText();
+    if (data == null || data.trim().isEmpty) {
+      return 'Clipboard is empty';
+    }
+    return sendClipboardTo(peer, data);
+  }
+
+  void _recordOutgoingClipboard(String data) {
+    _set(
+      state.copyWith(
+        clipboardHistory: [
+          ClipboardEntry(
+            data: data,
+            fromName: 'This device',
+            at: DateTime.now(),
+            outgoing: true,
+          ),
+          ...state.clipboardHistory,
+        ].take(20).toList(growable: false),
+      ),
+    );
+  }
+
+  void _startClipboardSync() {
+    _stopClipboardSync();
+    _clipboardTimer = Timer.periodic(
+      const Duration(seconds: 2),
+      (_) => unawaited(_clipboardTick()),
+    );
+    // Run one tick immediately so toggling on starts syncing right away.
+    unawaited(_clipboardTick());
+    _banner('Clipboard sync on');
+  }
+
+  void _stopClipboardSync() {
+    _clipboardTimer?.cancel();
+    _clipboardTimer = null;
+    _clipboardGuard.reset();
+  }
+
+  Future<void> _clipboardTick() async {
+    if (_clipboardSyncing || _disposed) return;
+    if (!state.settings.clipboardSync) return;
+    _clipboardSyncing = true;
+    try {
+      final data = await _readClipboardText();
+      if (data == null) return;
+      if (!_clipboardGuard.shouldPush(data)) return;
+      _clipboardGuard.markPushed(data);
+      _recordOutgoingClipboard(data);
+      final peers = state.peers
+          .where((peer) => peer.device.addresses.isNotEmpty)
+          .toList();
+      for (final peer in peers) {
+        await sendClipboardTo(peer.device, data);
+      }
+    } finally {
+      _clipboardSyncing = false;
+    }
+  }
+
+  Future<String?> _readClipboardText() async {
+    try {
+      final data = await Clipboard.getData(Clipboard.kTextPlain);
+      return data?.text;
+    } on Object {
+      return null;
     }
   }
 
@@ -984,6 +1129,10 @@ class AppController extends Notifier<AppState> {
     if (state.clipboardText != null) {
       _set(state.copyWith(clearClipboard: true));
     }
+  }
+
+  void clearClipboardHistory() {
+    _set(state.copyWith(clipboardHistory: const []));
   }
 
   // ---------------------------------------------------------------------------
@@ -1116,6 +1265,7 @@ class AppController extends Notifier<AppState> {
   Future<void> _dispose() async {
     _disposed = true;
     _addressTimer?.cancel();
+    _stopClipboardSync();
     await _peerSubscription?.cancel();
     for (final completer in _pendingOffers.values) {
       if (!completer.isCompleted) completer.complete(false);

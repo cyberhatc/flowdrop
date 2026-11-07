@@ -63,6 +63,21 @@ class IncomingText {
   String get senderName => payload.sender.name;
 }
 
+/// One clipboard payload observed, either locally or from a peer.
+class ClipboardEntry {
+  const ClipboardEntry({
+    required this.data,
+    required this.fromName,
+    required this.at,
+    this.outgoing = false,
+  });
+
+  final String data;
+  final String fromName;
+  final DateTime at;
+  final bool outgoing;
+}
+
 class AppState {
   const AppState({
     this.ready = false,
@@ -86,6 +101,7 @@ class AppState {
     this.qrPayload,
     this.clipboardText,
     this.clipboardFrom,
+    this.clipboardHistory = const [],
   });
 
   final bool ready;
@@ -122,6 +138,9 @@ class AppState {
   /// Last clipboard payload received from a paired device.
   final String? clipboardText;
   final String? clipboardFrom;
+
+  /// Last 20 clipboard payloads (incoming and outgoing), newest first.
+  final List<ClipboardEntry> clipboardHistory;
 
   String get deviceName =>
       settings.deviceName.isNotEmpty ? settings.deviceName : 'This device';
@@ -177,6 +196,7 @@ class AppState {
     String? clipboardText,
     String? clipboardFrom,
     bool clearClipboard = false,
+    List<ClipboardEntry>? clipboardHistory,
   }) {
     return AppState(
       ready: ready ?? this.ready,
@@ -202,6 +222,7 @@ class AppState {
           clearClipboard ? null : (clipboardText ?? this.clipboardText),
       clipboardFrom:
           clearClipboard ? null : (clipboardFrom ?? this.clipboardFrom),
+      clipboardHistory: clipboardHistory ?? this.clipboardHistory,
     );
   }
 }
