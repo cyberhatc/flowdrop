@@ -9,6 +9,7 @@
 ///
 /// Default size is 64 MiB of random data in one file. Output is
 /// machine-readable-ish: one line per run with size, elapsed and MB/s.
+// ignore_for_file: avoid_print
 library;
 
 import 'dart:io';
@@ -55,7 +56,7 @@ Future<void> main(List<String> args) async {
   final server = FlowDropServer(
     identity: receiver,
     downloadDirectory: downloads.path,
-    onOffer: (_, __, ___) async => true,
+    onOffer: (_, _, _) async => true,
     trustStore: InMemoryTrustStore(),
     tokenManager: PairingTokenManager(),
     deviceInfoBuilder: (port) =>
