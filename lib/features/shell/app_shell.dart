@@ -8,6 +8,7 @@ import '../../app/state/app_state.dart';
 import '../../features/history/history_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/incoming/incoming_dialogs.dart';
+import '../../features/onboarding/onboarding_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../features/share/share_bridge.dart';
 import '../../features/share/share_sheet.dart';
@@ -142,6 +143,9 @@ class _AppShellState extends ConsumerState<AppShell> {
     }
     if (!state.ready) {
       return _Splash(message: state.loadingMessage);
+    }
+    if (!state.settings.onboardingDone) {
+      return const OnboardingScreen();
     }
 
     final active = state.activeSessions.length;

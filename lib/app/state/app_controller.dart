@@ -1127,6 +1127,13 @@ class AppController extends Notifier<AppState> {
     }
   }
 
+  /// Marks the 3-slide onboarding as seen so it never shows again.
+  Future<void> completeOnboarding() async {
+    final next = state.settings.copyWith(onboardingDone: true);
+    await _settingsStore.save(next);
+    _set(state.copyWith(settings: next));
+  }
+
   Future<void> setReceiveDirectory(String path) async {
     final trimmed = path.trim();
     final next = state.settings.copyWith(receiveDirectory: trimmed);

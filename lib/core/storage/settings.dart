@@ -19,6 +19,7 @@ class AppSettings {
     this.discoveryEnabled = true,
     this.clipboardSync = false,
     this.receiveDirectory = '',
+    this.onboardingDone = false,
   });
 
   /// Empty means "use the platform default downloads folder".
@@ -36,6 +37,9 @@ class AppSettings {
   /// Empty means "use the platform downloads folder".
   final String receiveDirectory;
 
+  /// Set once the user finishes the 3-slide onboarding.
+  final bool onboardingDone;
+
   AppSettings copyWith({
     String? deviceName,
     AppThemeMode? themeMode,
@@ -45,6 +49,7 @@ class AppSettings {
     bool? discoveryEnabled,
     bool? clipboardSync,
     String? receiveDirectory,
+    bool? onboardingDone,
   }) {
     return AppSettings(
       deviceName: deviceName ?? this.deviceName,
@@ -55,6 +60,7 @@ class AppSettings {
       discoveryEnabled: discoveryEnabled ?? this.discoveryEnabled,
       clipboardSync: clipboardSync ?? this.clipboardSync,
       receiveDirectory: receiveDirectory ?? this.receiveDirectory,
+      onboardingDone: onboardingDone ?? this.onboardingDone,
     );
   }
 
@@ -67,6 +73,7 @@ class AppSettings {
         'discoveryEnabled': discoveryEnabled,
         'clipboardSync': clipboardSync,
         'receiveDirectory': receiveDirectory,
+        'onboardingDone': onboardingDone,
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -85,6 +92,7 @@ class AppSettings {
       discoveryEnabled: json['discoveryEnabled'] != false,
       clipboardSync: json['clipboardSync'] == true,
       receiveDirectory: json['receiveDirectory'] as String? ?? '',
+      onboardingDone: json['onboardingDone'] == true,
     );
   }
 
