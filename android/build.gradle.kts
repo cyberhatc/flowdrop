@@ -31,6 +31,20 @@ gradle.projectsEvaluated {
     }
 }
 
+// receive_sharing_intent 1.9.0 wants compileSdk 37 while Flutter's
+// Android defaults are older; align its Kotlin+Java targets onto the
+// app's JVM 17 pair. desktop_drop is self-consistent (1.8/1.8) and is
+// deliberately left alone — forcing 17 there is what broke it twice.
+project(":receive_sharing_intent").afterEvaluate {
+    tasks.withType<JavaCompile>().configureEach {
+        sourceCompatibility = JavaVersion.VERSION_17.toString()
+        targetCompatibility = JavaVersion.VERSION_17.toString()
+    }
+    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+        compilerOptions.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
+}
+
 val newBuildDir: Directory =
     rootProject.layout.buildDirectory
         .dir("../../build")
