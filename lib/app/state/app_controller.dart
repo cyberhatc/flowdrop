@@ -1,0 +1,1130 @@
+import 'dart:async';
+import 'dart:io';
+import 'dart:math' as math;
+
+import 'package:collection/collection.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:uuid/uuid.dart';
+
+import '../../core/discovery/discovery_service.dart';
+import '../../core/discovery/network_interfaces.dart';
+import '../../core/discovery/peer.dart';
+import '../../core/discovery/qr_payload.dart';
+import '../../core/protocol/constants.dart';
+import '../../core/protocol/device.dart';
+import '../../core/protocol/offers.dart';
+import '../../core/security/fingerprint.dart';
+import '../../core/security/identity.dart';
+import '../../core/security/pairing.dart';
+import '../../core/security/trust_store.dart';
+import '../../core/storage/history_store.dart';
+import '../../core/storage/settings.dart';
+import '../../core/transfer/transfer_models.dart';
+import '../../core/transport/client.dart';
+import '../../core/transport/server.dart';
+import '../storage/json_trust_store.dart';
+import '../storage/prefs_settings_store.dart';
+import '../storage/secure_identity_store.dart';
+import 'app_state.dart';
+
+final appControllerProvider = NotifierProvider<AppController, AppState>(
+  AppController.new,
+);
+
+/// Owns every long-lived resource: identity, HTTPS server, discovery, the
+/// trust store, history and active clients. The UI only calls methods here.
+class AppController extends Notifier<AppState> {
+  SettingsStore _settingsStore = InMemorySettingsStore();
+  SecureIdentityStore? _identityStore;
+  TrustStore? _trustStore;
+  HistoryStore? _history;
+
+  DeviceIdentity? _identity;
+  FlowDropServer? _server;
+  DiscoveryService? _discovery;
+  final PairingTokenManager _tokenManager = PairingTokenManager();
+
+  String _downloadDirectory = '';
+  List<String> _addresses = const [];
+  final Map<String, Completer<bool>> _pendingOffers = {};
+  final Map<String, FlowDropClient> _outgoingClients = {};
+  final Map<String, OfferRequest> _incomingOffers = {};
+  final Set<String> _cancelledSessions = {};
+
+  StreamSubscription<List<Peer>>? _peerSubscription;
+  Timer? _addressTimer;
+  bool _initialising = false;
+  bool _disposed = false;
+
+  @override
+  AppState build() {
+    ref.onDispose(_dispose);
+    return const AppState();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Startup
+  // ---------------------------------------------------------------------------
+
+  Future<void> init() async {
+    if (_initialising || state.ready) return;
+    _initialising = true;
+    try {
+      _settingsStore = PrefsSettingsStore();
+      _identityStore = SecureIdentityStore();
+
+      final support = await getApplicationSupportDirectory();
+      final downloads = await getDownloadsDirectory() ??
+          await getApplicationDocumentsDirectory();
+
+      var settings = await _settingsStore.load();
+      final hostname = _hostname();
+      if (settings.deviceName.trim().isEmpty) {
+        settings = settings.copyWith(deviceName: hostname);
+        await _settingsStore.save(settings);
+      }
+      _set(state.copyWith(settings: settings));
+
+      _set(state.copyWith(loadingMessage: 'Creating your secure identity…'));
+      final stored = await _identityStore!.load();
+      final identity = stored ??
+          await DeviceIdentity.generate(
+            name: settings.deviceName,
+            platform: Platform.operatingSystem,
+          );
+      final named = identity.copyWith(name: settings.deviceName);
+      _identity = named;
+      await _identityStore!.save(named);
+
+      _trustStore = JsonTrustStore(
+        File(p.join(support.path, 'trusted_devices.json')),
+      );
+      try {
+        _history = HistoryStore.open(p.join(support.path, 'history.db'));
+      } on Object {
+        _history = HistoryStore.inMemory();
+      }
+
+      _downloadDirectory = settings.receiveDirectory.trim().isNotEmpty
+          ? settings.receiveDirectory
+          : p.join(downloads.path, 'FlowDrop');
+      await Directory(_downloadDirectory).create(recursive: true);
+      await _refreshAddressesInternal();
+
+      _set(state.copyWith(loadingMessage: 'Starting the secure server…'));
+      await _startServer();
+
+      final trusted = await _trustStore!.all();
+      _set(
+        state.copyWith(
+          ready: true,
+          loadingMessage: 'Live',
+          identity: named,
+          trustedDevices: trusted,
+          history: _history?.recent() ?? const [],
+        ),
+      );
+
+      await _startDiscovery();
+      _addressTimer = Timer.periodic(
+        const Duration(seconds: 20),
+        (_) => unawaited(refreshAddresses()),
+      );
+    } on Object catch (error) {
+      _set(
+        state.copyWith(
+          fatalError: 'FlowDrop could not start: $error',
+          loadingMessage: 'Startup failed',
+        ),
+      );
+    } finally {
+      _initialising = false;
+    }
+  }
+
+  String _hostname() {
+    try {
+      final name = Platform.localHostname.trim();
+      if (name.isNotEmpty) return name;
+    } on Object {
+      // Some sandboxes block the hostname lookup.
+    }
+    return 'FlowDrop device';
+  }
+
+  Future<void> _startServer() async {
+    final identity = _identity;
+    if (identity == null) throw StateError('Identity is not ready');
+    final server = FlowDropServer(
+      identity: identity,
+      downloadDirectory: _downloadDirectory,
+      onOffer: _approveOffer,
+      trustStore: _trustStore!,
+      tokenManager: _tokenManager,
+      deviceInfoBuilder: (port) => identity.toDeviceInfo(
+        addresses: _effectiveAddresses,
+        port: port,
+        name: state.settings.deviceName,
+      ),
+      onText: _handleIncomingText,
+      onClipboard: _handleClipboard,
+      onEvent: _handleServerEvent,
+    );
+    await server.start();
+    _server = server;
+    _set(
+      state.copyWith(
+        serverRunning: true,
+        serverPort: server.port,
+        localDevice: _currentLocalDevice,
+        addresses: _addresses,
+      ),
+    );
+  }
+
+  Future<void> _startDiscovery() async {
+    await _peerSubscription?.cancel();
+    _peerSubscription = null;
+    await _discovery?.dispose();
+
+    if (!state.settings.discoveryEnabled) {
+      _discovery = null;
+      _set(state.copyWith(udpRunning: false, mdnsRunning: false));
+      return;
+    }
+
+    final discovery = DiscoveryService(
+      deviceInfo: () => _currentLocalDevice ?? _fallbackDevice,
+      useMdns: state.settings.useMdns,
+      onError: (_) {
+        // Discovery is best effort. A firewall hint is shown in the UI.
+      },
+    );
+    _discovery = discovery;
+    try {
+      await discovery.start();
+    } on Object {
+      // QR and manual connect still work.
+    }
+    _peerSubscription = discovery.peers.listen((peers) {
+      _set(state.copyWith(peers: peers));
+    });
+    _set(
+      state.copyWith(
+        peers: discovery.nearby,
+        udpRunning: discovery.udpRunning,
+        mdnsRunning: discovery.mdnsRunning,
+      ),
+    );
+  }
+
+  DeviceInfo get _fallbackDevice => DeviceInfo(
+        id: _identity?.id ?? '',
+        name: state.settings.deviceName,
+        platform: Platform.operatingSystem,
+        publicKey: _identity?.publicKey ?? '',
+        fingerprint: _identity?.fingerprint ?? '',
+        addresses: _effectiveAddresses,
+        port: _server?.port ?? FlowDropProtocol.defaultPort,
+      );
+
+  DeviceInfo? get _currentLocalDevice {
+    final identity = _identity;
+    if (identity == null) return null;
+    return identity.toDeviceInfo(
+      addresses: _effectiveAddresses,
+      port: _server?.port ?? FlowDropProtocol.defaultPort,
+      name: state.settings.deviceName,
+    );
+  }
+
+  List<String> get _effectiveAddresses =>
+      _addresses.isEmpty ? const ['127.0.0.1'] : _addresses;
+
+  Future<void> _refreshAddressesInternal() async {
+    try {
+      _addresses = await localIPv4Addresses();
+    } on Object {
+      _addresses = const [];
+    }
+  }
+
+  Future<void> refreshAddresses() async {
+    await _refreshAddressesInternal();
+    _set(
+      state.copyWith(
+        addresses: _addresses,
+        localDevice: _currentLocalDevice,
+      ),
+    );
+  }
+
+  Future<void> refreshNearby() async {
+    await refreshAddresses();
+    await _discovery?.refresh();
+    _set(state.copyWith(peers: _discovery?.nearby ?? state.peers));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Incoming
+  // ---------------------------------------------------------------------------
+
+  Future<bool> _approveOffer(
+    OfferRequest offer,
+    String remoteIp,
+    bool trusted,
+  ) async {
+    if (trusted && state.settings.autoAcceptTrusted) {
+      await _beginIncoming(offer, remoteIp, trusted);
+      return true;
+    }
+
+    final completer = Completer<bool>();
+    _pendingOffers[offer.sessionId] = completer;
+    _set(
+      state.copyWith(
+        incoming: [
+          ...state.incoming,
+          IncomingOffer(
+            offer: offer,
+            remoteIp: remoteIp,
+            trusted: trusted,
+            completer: completer,
+          ),
+        ],
+      ),
+    );
+    _banner(
+      offer.files.isEmpty
+          ? '${offer.sender.name} sent text'
+          : '${offer.sender.name} wants to send ${offer.files.length} file${offer.files.length == 1 ? '' : 's'}',
+    );
+
+    final accepted = await completer.future;
+    _pendingOffers.remove(offer.sessionId);
+    _set(
+      state.copyWith(
+        incoming: state.incoming
+            .where((entry) => entry.sessionId != offer.sessionId)
+            .toList(growable: false),
+      ),
+    );
+    if (accepted) {
+      await _beginIncoming(offer, remoteIp, trusted);
+    } else {
+      await _saveRecord(
+        _recordFrom(
+          offer,
+          TransferDirection.received,
+          DateTime.now(),
+          TransferState.declined,
+          finishedAt: DateTime.now(),
+        ),
+      );
+    }
+    return accepted;
+  }
+
+  /// Registers an accepted incoming session exactly once. The server calls the
+  /// approval callback before it creates its own session, so this is the only
+  /// place incoming progress can be attached to a UI session.
+  Future<void> _beginIncoming(
+    OfferRequest offer,
+    String remoteIp,
+    bool trusted,
+  ) async {
+    _incomingOffers[offer.sessionId] = offer;
+    final textOnly = offer.files.isEmpty;
+    final progress = SessionProgress(
+      sessionId: offer.sessionId,
+      peerName: offer.sender.name,
+      files: offer.files
+          .map(
+            (file) => FileProgress(
+              fileId: file.id,
+              name: file.name,
+              totalBytes: file.size,
+            ),
+          )
+          .toList(growable: false),
+      state: textOnly ? TransferState.completed : TransferState.active,
+      text: offer.text,
+      direction: TransferDirection.received,
+    );
+    _upsertSession(progress);
+    await _saveRecord(
+      _recordFrom(
+        offer,
+        TransferDirection.received,
+        DateTime.now(),
+        textOnly ? TransferState.completed : TransferState.active,
+        finishedAt: textOnly ? DateTime.now() : null,
+      ),
+    );
+  }
+
+  void acceptIncoming(String sessionId) {
+    final completer = _pendingOffers.remove(sessionId);
+    if (completer != null && !completer.isCompleted) completer.complete(true);
+  }
+
+  void declineIncoming(String sessionId) {
+    final completer = _pendingOffers.remove(sessionId);
+    if (completer != null && !completer.isCompleted) completer.complete(false);
+  }
+
+  Future<void> _handleIncomingText(
+    TextPayload payload,
+    String remoteIp,
+    bool trusted,
+  ) async {
+    _set(
+      state.copyWith(
+        incomingTexts: [
+          IncomingText(
+            payload: payload,
+            remoteIp: remoteIp,
+            trusted: trusted,
+            receivedAt: DateTime.now(),
+          ),
+          ...state.incomingTexts,
+        ].take(50).toList(growable: false),
+      ),
+    );
+    _banner('Text received from ${payload.sender.name}');
+  }
+
+  void _handleClipboard(String fromFingerprint, String data) {
+    final trusted = state.trustedDevices
+        .where((device) => fingerprintsEqual(device.fingerprint, fromFingerprint))
+        .map((device) => device.name)
+        .firstOrNull;
+    _set(
+      state.copyWith(
+        clipboardText: data,
+        clipboardFrom: trusted ?? 'a paired device',
+      ),
+    );
+    _banner('Clipboard received from ${trusted ?? 'a paired device'}');
+  }
+
+  void dismissIncomingText(IncomingText text) {
+    _set(
+      state.copyWith(
+        incomingTexts: state.incomingTexts
+            .where((entry) => !identical(entry, text))
+            .toList(growable: false),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Outgoing
+  // ---------------------------------------------------------------------------
+
+  Future<String?> sendToPeer({
+    required DeviceInfo peer,
+    required List<SendFile> files,
+    String? text,
+  }) async {
+    final identity = _identity;
+    if (identity == null) return 'FlowDrop is still starting.';
+    if (peer.addresses.isEmpty) return 'No network address for ${peer.name}.';
+    final trimmed = text?.trim();
+    if (files.isEmpty && (trimmed == null || trimmed.isEmpty)) {
+      return 'Pick at least one file or type a message.';
+    }
+
+    final local = _currentLocalDevice;
+    if (local == null) return 'FlowDrop is still starting.';
+
+    final sessionId = FlowDropClient.newSessionId();
+    final startedAt = DateTime.now();
+    final offered = files
+        .map(
+          (file) => OfferedFile(
+            id: const Uuid().v4(),
+            name: file.name,
+            size: file.size,
+            mime: file.mime,
+          ),
+        )
+        .toList(growable: false);
+    final byId = {
+      for (var i = 0; i < offered.length; i++) offered[i].id: files[i],
+    };
+    final offer = OfferRequest(
+      sessionId: sessionId,
+      sender: local,
+      files: offered,
+      text: trimmed == null || trimmed.isEmpty ? null : trimmed,
+    );
+
+    final client = FlowDropClient(
+      host: peer.addresses.first,
+      port: peer.port,
+      identity: identity,
+      localDevice: local,
+      expectedFingerprint: peer.fingerprint,
+    );
+    _outgoingClients[sessionId] = client;
+    _upsertSession(
+      SessionProgress(
+        sessionId: sessionId,
+        peerName: peer.name,
+        files: offered
+            .map(
+              (file) => FileProgress(
+                fileId: file.id,
+                name: file.name,
+                totalBytes: file.size,
+              ),
+            )
+            .toList(growable: false),
+        text: offer.text,
+        direction: TransferDirection.sent,
+      ),
+    );
+    await _saveRecord(
+      _recordFrom(
+        offer,
+        TransferDirection.sent,
+        startedAt,
+        TransferState.active,
+      ),
+    );
+
+    try {
+      final remote = await client.info();
+      if (remote.id != peer.id) {
+        throw FlowDropException(
+          'device_changed',
+          '${peer.name} presented a different identity. Reconnect to continue.',
+        );
+      }
+      final response = await client.offer(offer);
+      if (!response.accepted) {
+        _markSession(sessionId, TransferState.declined);
+        await _updateRecordState(sessionId, TransferState.declined);
+        return '${peer.name} declined the transfer.';
+      }
+      if (files.isNotEmpty) {
+        await _uploadAll(
+          client: client,
+          sessionId: sessionId,
+          offered: offered,
+          filesById: byId,
+          uploadUrls: response.uploadUrls,
+        );
+      }
+      if (_cancelledSessions.contains(sessionId)) {
+        return 'Transfer cancelled.';
+      }
+      _markSession(sessionId, TransferState.completed);
+      await _updateRecordState(sessionId, TransferState.completed);
+      return null;
+    } on FlowDropException catch (error) {
+      if (_cancelledSessions.contains(sessionId)) {
+        return 'Transfer cancelled.';
+      }
+      _markSession(sessionId, TransferState.failed);
+      await _updateRecordState(sessionId, TransferState.failed);
+      return error.message;
+    } on Object catch (error) {
+      if (_cancelledSessions.contains(sessionId)) {
+        return 'Transfer cancelled.';
+      }
+      _markSession(sessionId, TransferState.failed);
+      await _updateRecordState(sessionId, TransferState.failed);
+      return 'Transfer failed: $error';
+    } finally {
+      _outgoingClients.remove(sessionId);
+      client.close();
+    }
+  }
+
+  Future<void> _uploadAll({
+    required FlowDropClient client,
+    required String sessionId,
+    required List<OfferedFile> offered,
+    required Map<String, SendFile> filesById,
+    required Map<String, String> uploadUrls,
+  }) async {
+    final queue = [...offered];
+    final workers = math.min(
+      FlowDropProtocol.maxParallelUploads,
+      math.max(1, queue.length),
+    );
+
+    Future<void> worker() async {
+      while (queue.isNotEmpty) {
+        if (_cancelledSessions.contains(sessionId)) return;
+        final offeredFile = queue.removeAt(0);
+        final local = filesById[offeredFile.id];
+        if (local == null) continue;
+        final path = uploadUrls[offeredFile.id] ??
+            '/v1/upload/$sessionId/${offeredFile.id}';
+        await _uploadOne(
+          client: client,
+          sessionId: sessionId,
+          offeredFile: offeredFile,
+          localPath: local.path,
+          uploadPath: path,
+        );
+      }
+    }
+
+    await Future.wait(List.generate(workers, (_) => worker()));
+  }
+
+  Future<void> _uploadOne({
+    required FlowDropClient client,
+    required String sessionId,
+    required OfferedFile offeredFile,
+    required String localPath,
+    required String uploadPath,
+  }) async {
+    void progress(int sent, int total) =>
+        _updateFileProgress(sessionId, offeredFile.id, sent, total);
+
+    try {
+      await client.uploadFile(
+        file: offeredFile,
+        localPath: localPath,
+        uploadPath: uploadPath,
+        onProgress: progress,
+      );
+    } on FlowDropException catch (error) {
+      if (error.code != 'network_error' && error.code != 'resume_failed') {
+        rethrow;
+      }
+      if (_cancelledSessions.contains(sessionId)) return;
+      // One resume attempt: ask the receiver how many bytes it kept and
+      // continue from there.
+      final status = await client.status(sessionId);
+      final remote = status.files.firstWhere(
+        (file) => file.id == offeredFile.id,
+        orElse: () => FileStatus(
+          id: offeredFile.id,
+          received: 0,
+          size: offeredFile.size,
+          state: 'pending',
+        ),
+      );
+      if (remote.received <= 0 || remote.received >= offeredFile.size) rethrow;
+      await client.uploadFile(
+        file: offeredFile,
+        localPath: localPath,
+        uploadPath: uploadPath,
+        startOffset: remote.received,
+        onProgress: progress,
+      );
+    }
+  }
+
+  Future<String?> sendClipboardTo(DeviceInfo peer, String text) async {
+    final identity = _identity;
+    final local = _currentLocalDevice;
+    if (identity == null || local == null || peer.addresses.isEmpty) {
+      return 'FlowDrop is not ready.';
+    }
+    final client = FlowDropClient(
+      host: peer.addresses.first,
+      port: peer.port,
+      identity: identity,
+      localDevice: local,
+      expectedFingerprint: peer.fingerprint,
+    );
+    try {
+      await client.info();
+      await client.sendClipboard(text);
+      return null;
+    } on FlowDropException catch (error) {
+      return error.message;
+    } on Object catch (error) {
+      return 'Clipboard failed: $error';
+    } finally {
+      client.close();
+    }
+  }
+
+  Future<void> cancelSession(String sessionId) async {
+    _cancelledSessions.add(sessionId);
+    final client = _outgoingClients[sessionId];
+    if (client != null) {
+      try {
+        await client.cancel(sessionId);
+      } on Object {
+        // The peer may already be gone.
+      }
+    }
+    _markSession(sessionId, TransferState.cancelled);
+    await _updateRecordState(sessionId, TransferState.cancelled);
+    _banner('Transfer cancelled');
+  }
+
+  void dismissSession(String sessionId) {
+    _set(
+      state.copyWith(
+        sessions: state.sessions
+            .where((session) => session.sessionId != sessionId)
+            .toList(growable: false),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Server events
+  // ---------------------------------------------------------------------------
+
+  void _handleServerEvent(ServerEvent event) {
+    switch (event.type) {
+      case 'progress':
+        _handleProgress(event);
+      case 'completed':
+        {
+          final sessionId = event.data['sessionId'];
+          if (sessionId is String) {
+            _markSession(sessionId, TransferState.completed);
+            unawaited(
+              _updateRecordState(sessionId, TransferState.completed),
+            );
+          }
+        }
+      case 'cancelled':
+        {
+          final sessionId = event.data['sessionId'];
+          if (sessionId is String) {
+            _markSession(sessionId, TransferState.cancelled);
+            unawaited(
+              _updateRecordState(sessionId, TransferState.cancelled),
+            );
+          }
+        }
+      case 'clipboard':
+        {
+          final data = event.data['data'];
+          final from = event.data['from'];
+          if (data is String && from is String) {
+            _handleClipboard(from, data);
+          }
+        }
+      case 'text':
+        {
+          final payload = event.data['payload'];
+          if (payload is Map<String, dynamic>) {
+            try {
+              unawaited(
+                _handleIncomingText(
+                  TextPayload.fromJson(payload),
+                  'unknown',
+                  true,
+                ),
+              );
+            } on Object {
+              // Ignore malformed third-party events.
+            }
+          }
+        }
+      default:
+        break;
+    }
+  }
+
+  void _handleProgress(ServerEvent event) {
+    final sessionId = event.data['sessionId'];
+    final fileId = event.data['fileId'];
+    final received = _asInt(event.data['received']);
+    if (sessionId is! String || fileId is! String || received == null) return;
+    final session = _findSession(sessionId);
+    if (session == null) return;
+    final files = session.files
+        .map(
+          (file) => file.fileId == fileId
+              ? file.copyWith(
+                  transferredBytes: received,
+                  state: TransferState.active,
+                )
+              : file,
+        )
+        .toList(growable: false);
+    _upsertSession(session.copyWith(files: files, state: TransferState.active));
+  }
+
+  int? _asInt(Object? value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return null;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Pairing and connection
+  // ---------------------------------------------------------------------------
+
+  Future<QrPayload> createQrPayload() async {
+    final identity = _identity;
+    if (identity == null || _server == null) {
+      throw FlowDropException('not_ready', 'FlowDrop is still starting.');
+    }
+    await refreshAddresses();
+    final token = _tokenManager.issue();
+    final payload = QrPayload.fromDevice(
+      device: identity.toDeviceInfo(
+        addresses: _effectiveAddresses,
+        port: _server!.port,
+        name: state.settings.deviceName,
+      ),
+      token: token,
+    );
+    _set(state.copyWith(qrPayload: payload));
+    return payload;
+  }
+
+  Future<DeviceInfo> connectManually({
+    required String host,
+    required int port,
+    required String fingerprint,
+  }) async {
+    final identity = _identity;
+    final local = _currentLocalDevice;
+    final normalized = normalizeFingerprint(fingerprint);
+    if (identity == null || local == null) {
+      throw FlowDropException('not_ready', 'FlowDrop is still starting.');
+    }
+    if (host.trim().isEmpty) {
+      throw FlowDropException('bad_input', 'Enter the other device IP address.');
+    }
+    if (normalized.length < 16) {
+      throw FlowDropException(
+        'bad_input',
+        'Enter at least 16 characters of the certificate fingerprint.',
+      );
+    }
+    final client = FlowDropClient(
+      host: host.trim(),
+      port: port,
+      identity: identity,
+      localDevice: local,
+      expectedFingerprint: normalized,
+    );
+    try {
+      final info = await client.info();
+      _discovery?.addManual(info);
+      _set(state.copyWith(peers: _discovery?.nearby ?? state.peers));
+      return info;
+    } finally {
+      client.close();
+    }
+  }
+
+  Future<DeviceInfo> connectWithQr(QrPayload payload) async {
+    final identity = _identity;
+    final local = _currentLocalDevice;
+    if (identity == null || local == null) {
+      throw FlowDropException('not_ready', 'FlowDrop is still starting.');
+    }
+
+    DeviceInfo? remote;
+    Object? lastError;
+    for (final address in payload.addresses) {
+      final probe = FlowDropClient(
+        host: address,
+        port: payload.port,
+        identity: identity,
+        localDevice: local,
+        expectedFingerprint: payload.fingerprint,
+      );
+      try {
+        final info = await probe.info();
+        if (info.id != payload.deviceId) {
+          throw FlowDropException(
+            'device_changed',
+            'This code belongs to a different device.',
+          );
+        }
+        remote = info;
+        break;
+      } on Object catch (error) {
+        lastError = error;
+      } finally {
+        probe.close();
+      }
+    }
+    if (remote == null) {
+      throw FlowDropException(
+        'unreachable',
+        'Could not reach ${payload.name}. $lastError',
+      );
+    }
+
+    final client = FlowDropClient(
+      host: remote.addresses.isNotEmpty
+          ? remote.addresses.first
+          : payload.addresses.first,
+      port: remote.port,
+      identity: identity,
+      localDevice: local,
+      expectedFingerprint: remote.fingerprint,
+    );
+    try {
+      final response = await client.pair(payload: payload);
+      if (!response.ok) {
+        throw FlowDropException(
+          response.error ?? 'pair_failed',
+          'The other device rejected the pairing code.',
+        );
+      }
+    } finally {
+      client.close();
+    }
+
+    await _trustStore!.trust(TrustedDevice.fromDevice(remote));
+    final trusted = await _trustStore!.all();
+    _discovery?.addFromQr(remote);
+    _set(
+      state.copyWith(
+        peers: _discovery?.nearby ?? state.peers,
+        trustedDevices: trusted,
+      ),
+    );
+    _banner('Paired with ${remote.name}');
+    return remote;
+  }
+
+  Future<void> forgetDevice(String fingerprint) async {
+    await _trustStore?.forget(fingerprint);
+    final trusted = await _trustStore?.all() ?? const [];
+    _set(state.copyWith(trustedDevices: trusted));
+    _banner('Device removed');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Settings and housekeeping
+  // ---------------------------------------------------------------------------
+
+  Future<void> applySettings(AppSettings next) async {
+    final previous = state.settings;
+    await _settingsStore.save(next);
+    _set(state.copyWith(settings: next));
+
+    if (next.deviceName.trim().isNotEmpty &&
+        next.deviceName != previous.deviceName) {
+      final identity = _identity;
+      if (identity != null) {
+        final renamed = identity.copyWith(name: next.deviceName.trim());
+        _identity = renamed;
+        await _identityStore?.save(renamed);
+        _set(state.copyWith(identity: renamed, localDevice: _currentLocalDevice));
+      }
+    }
+
+    if (next.discoveryEnabled != previous.discoveryEnabled ||
+        next.useMdns != previous.useMdns) {
+      await _startDiscovery();
+    }
+  }
+
+  Future<void> setReceiveDirectory(String path) async {
+    final trimmed = path.trim();
+    final next = state.settings.copyWith(receiveDirectory: trimmed);
+    await _settingsStore.save(next);
+    _set(state.copyWith(settings: next));
+    try {
+      if (trimmed.isNotEmpty) {
+        await Directory(trimmed).create(recursive: true);
+        _downloadDirectory = trimmed;
+        _server?.downloadDirectory = trimmed;
+      } else {
+        final downloads = await getDownloadsDirectory() ??
+            await getApplicationDocumentsDirectory();
+        final resolved = p.join(downloads.path, 'FlowDrop');
+        await Directory(resolved).create(recursive: true);
+        _downloadDirectory = resolved;
+        _server?.downloadDirectory = resolved;
+      }
+      _banner(trimmed.isEmpty
+          ? 'Using the default Downloads folder'
+          : 'Saving incoming files to $trimmed');
+    } on Object catch (error) {
+      _banner('Could not use that folder: $error');
+    }
+  }
+
+  Future<void> clearHistory() async {
+    _history?.clear();
+    _set(state.copyWith(history: const []));
+  }
+
+  Future<void> deleteHistoryEntry(String id) async {
+    _history?.delete(id);
+    _set(
+      state.copyWith(
+        history: state.history
+            .where((entry) => entry.id != id)
+            .toList(growable: false),
+      ),
+    );
+  }
+
+  void clearNotice() {
+    if (state.notice != null) {
+      _set(state.copyWith(clearNotice: true));
+    }
+  }
+
+  void clearFatalError() {
+    if (state.fatalError != null) {
+      _set(state.copyWith(clearFatalError: true, loadingMessage: 'Retrying…'));
+    }
+  }
+
+  void clearClipboard() {
+    if (state.clipboardText != null) {
+      _set(state.copyWith(clearClipboard: true));
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
+
+  TransferRecord _recordFrom(
+    OfferRequest offer,
+    TransferDirection direction,
+    DateTime startedAt,
+    TransferState transferState, {
+    DateTime? finishedAt,
+  }) {
+    return TransferRecord(
+      id: offer.sessionId,
+      peerName: offer.sender.name,
+      peerDeviceId: offer.sender.id,
+      direction: direction,
+      files: offer.files,
+      totalBytes: offer.totalSize,
+      startedAt: startedAt,
+      finishedAt: finishedAt,
+      state: transferState,
+      textPreview: offer.text,
+    );
+  }
+
+  Future<void> _saveRecord(TransferRecord record) async {
+    try {
+      _history?.upsert(record);
+    } on Object {
+      // History is a convenience; never fail a transfer over it.
+    }
+    final list = [...state.history];
+    final index = list.indexWhere((entry) => entry.id == record.id);
+    if (index >= 0) {
+      list[index] = record;
+    } else {
+      list.insert(0, record);
+    }
+    _set(state.copyWith(history: list.take(200).toList(growable: false)));
+  }
+
+  Future<void> _updateRecordState(
+    String sessionId,
+    TransferState next, {
+    String? savedPath,
+  }) async {
+    final index =
+        state.history.indexWhere((entry) => entry.id == sessionId);
+    if (index < 0) return;
+    final current = state.history[index];
+    final finished = next == TransferState.completed ||
+        next == TransferState.failed ||
+        next == TransferState.cancelled ||
+        next == TransferState.declined;
+    await _saveRecord(
+      current.copyWith(
+        state: next,
+        finishedAt: finished ? DateTime.now() : null,
+        savedPath: savedPath,
+      ),
+    );
+  }
+
+  SessionProgress? _findSession(String sessionId) {
+    for (final session in state.sessions) {
+      if (session.sessionId == sessionId) return session;
+    }
+    return null;
+  }
+
+  void _upsertSession(SessionProgress session) {
+    final list = [...state.sessions];
+    final index =
+        list.indexWhere((entry) => entry.sessionId == session.sessionId);
+    if (index >= 0) {
+      list[index] = session;
+    } else {
+      list.insert(0, session);
+    }
+    _set(state.copyWith(sessions: list.take(100).toList(growable: false)));
+  }
+
+  void _markSession(String sessionId, TransferState next) {
+    final session = _findSession(sessionId);
+    if (session == null) return;
+    final files = session.files
+        .map(
+          (file) => file.copyWith(
+            state: next,
+            transferredBytes:
+                next == TransferState.completed ? file.totalBytes : null,
+          ),
+        )
+        .toList(growable: false);
+    _upsertSession(session.copyWith(files: files, state: next));
+  }
+
+  void _updateFileProgress(
+    String sessionId,
+    String fileId,
+    int transferred,
+    int total,
+  ) {
+    final session = _findSession(sessionId);
+    if (session == null) return;
+    final files = session.files
+        .map(
+          (file) => file.fileId == fileId
+              ? file.copyWith(
+                  transferredBytes: transferred,
+                  state: TransferState.active,
+                )
+              : file,
+        )
+        .toList(growable: false);
+    _upsertSession(session.copyWith(files: files, state: TransferState.active));
+  }
+
+  void _banner(String message) {
+    _set(state.copyWith(notice: message));
+  }
+
+  void _set(AppState next) {
+    if (_disposed) return;
+    state = next;
+  }
+
+  Future<void> _dispose() async {
+    _disposed = true;
+    _addressTimer?.cancel();
+    await _peerSubscription?.cancel();
+    for (final completer in _pendingOffers.values) {
+      if (!completer.isCompleted) completer.complete(false);
+    }
+    for (final client in _outgoingClients.values) {
+      client.close();
+    }
+    await _discovery?.dispose();
+    await _server?.stop();
+    _history?.close();
+  }
+}
