@@ -5,6 +5,14 @@ allprojects {
     }
 }
 
+// receive_sharing_intent ships Kotlin 1.9.x JVM defaults (25); force
+// JVM 17 everywhere so Java/Kotlin compatibility checks pass.
+allprojects {
+    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+        compilerOptions.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
+}
+
 val newBuildDir: Directory =
     rootProject.layout.buildDirectory
         .dir("../../build")
