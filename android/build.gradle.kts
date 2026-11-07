@@ -1,15 +1,27 @@
 // All plugins default to different JVM targets (1.8 vs 17 vs 25)
-// which recent AGP refuses to build. Force 17 everywhere — but only
-// after every project (and its plugins) has been evaluated, otherwise
-// the plugin's own defaults overwrite these values.
+// which recent AGP refuses to build. Force 17 everywhere — both the
+// android extension (what AGP reads when it configures JavaCompile
+// tasks) and the Kotlin compilerOptions (KGP reads this, not the
+// task's bare jvmTarget field).
 gradle.projectsEvaluated {
     allprojects {
-        tasks.withType<JavaCompile>().configureEach {
-            sourceCompatibility = JavaVersion.VERSION_17.toString()
-            targetCompatibility = JavaVersion.VERSION_17.toString()
-        }
-        tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-            compilerOptions.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        afterEvaluate {
+            val android = extensions.findByName("android")
+            if (android is com.android.build.api.dsl.CommonExtension<*, *, *, *>) {
+                @Suppress("DEPRECATION")
+                android.compileOptions.sourceCompatibility =
+                    JavaVersion.VERSION_17
+                @Suppress("DEPRECATION")
+                android.compileOptions.targetCompatibility =
+                    JavaVersion.VERSION_17
+            }
+            tasks.withType<JavaCompile>().configureEach {
+                sourceCompatibility = JavaVersion.VERSION_17.toString()
+                targetCompatibility = JavaVersion.VERSION_17.toString()
+            }
+            tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+                compilerOptions.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+            }
         }
     }
 }
