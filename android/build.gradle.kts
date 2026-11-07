@@ -1,9 +1,10 @@
-// All plugins default to different JVM targets (1.8 vs 17 vs 25)
-// which recent AGP refuses to build. Force 17 everywhere.
 // The android extension's compileOptions are what AGP reads when it
 // configures JavaCompile tasks, so set them via reflection here — the
 // Kotlin DSL does not expose them on the generic extension type.
-gradle.projectsEvaluated {
+// This must live in projectsEvaluated (the last valid moment before
+// task execution); wrapping inputs in lobby "afterEvaluate" style also
+// gets evaluation-order issues — direct calls avoid them.
+ gradle.projectsEvaluated {
     allprojects {
         afterEvaluate {
             try {
