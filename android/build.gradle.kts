@@ -3,11 +3,13 @@ allprojects {
         google()
         mavenCentral()
     }
-}
 
-// receive_sharing_intent ships Kotlin 1.9.x JVM defaults (25); force
-// JVM 17 everywhere so Java/Kotlin compatibility checks pass.
-allprojects {
+    // All plugins default to different JVM targets (1.8 vs 17 vs 25)
+    // which recent AGP refuses to build. Force 17 everywhere.
+    tasks.withType<JavaCompile>().configureEach {
+        sourceCompatibility = JavaVersion.VERSION_17.toString()
+        targetCompatibility = JavaVersion.VERSION_17.toString()
+    }
     tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
         compilerOptions.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
