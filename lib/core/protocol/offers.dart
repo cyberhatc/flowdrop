@@ -335,8 +335,12 @@ class ServerEvent {
         'received': received,
         'total': total,
       });
-  static ServerEvent completed(String sessionId) =>
-      ServerEvent('completed', {'sessionId': sessionId});
+  static ServerEvent completed(String sessionId, {List<String>? savedPaths}) =>
+      ServerEvent('completed', {
+        'sessionId': sessionId,
+        if (savedPaths != null && savedPaths.isNotEmpty)
+          'savedPaths': savedPaths,
+      });
   static ServerEvent cancelled(String sessionId) =>
       ServerEvent('cancelled', {'sessionId': sessionId});
   static ServerEvent text(TextPayload payload) =>

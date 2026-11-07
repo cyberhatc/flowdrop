@@ -7,6 +7,7 @@ import '../../app/state/app_state.dart';
 import '../../core/security/fingerprint.dart';
 import '../../core/transfer/checksum.dart';
 import '../../ui/glow.dart';
+import '../shell/platform_actions.dart';
 
 /// Accept/decline prompt shown for every offer from an untrusted device.
 ///
@@ -308,6 +309,7 @@ class IncomingTextDialog extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final controller = ref.read(appControllerProvider.notifier);
     return AlertDialog(
       title: Row(
         children: [
@@ -332,7 +334,13 @@ class IncomingTextDialog extends ConsumerWidget {
         ),
       ),
       actions: [
-        TextButton(
+        if (isLink(entry.text))
+          TextButton.icon(
+            onPressed: () => openLink(entry.text),
+            icon: const Icon(Icons.open_in_new_rounded, size: 16),
+            label: const Text('Open'),
+          ),
+        TextButton.icon(
           onPressed: () async {
             await Clipboard.setData(ClipboardData(text: entry.text));
             if (context.mounted) {
@@ -341,7 +349,23 @@ class IncomingTextDialog extends ConsumerWidget {
               );
             }
           },
-          child: const Text('Copy'),
+          icon: const Icon(Icons.copy_rounded, size: 16),
+          label: const Text('Copy'),
+        ),
+        TextButton.icon(
+          onPressed: () async {
+            final saved =
+                await controller.saveTextAsFile(entry.text, entry.senderName);
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(saved ?? 'Saved as .txt'),
+                ),
+              );
+            }
+          },
+          icon: const Icon(Icons.save_rounded, size: 16),
+          label: const Text('Save .txt'),
         ),
         GlowButton(
           label: 'Done',

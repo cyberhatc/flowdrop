@@ -6,6 +6,7 @@ import '../../app/state/app_controller.dart';
 import '../../core/transfer/checksum.dart';
 import '../../core/transfer/transfer_models.dart';
 import '../../ui/glow.dart';
+import '../shell/platform_actions.dart';
 
 class TransfersScreen extends ConsumerWidget {
   const TransfersScreen({super.key});
@@ -179,6 +180,23 @@ class _SessionCard extends StatelessWidget {
                   tooltip: 'Dismiss',
                   onPressed: onDismiss,
                   icon: const Icon(Icons.clear_rounded, size: 18),
+                ),
+              if (session.firstSavedPath != null)
+                IconButton(
+                  tooltip: 'Show in folder',
+                  onPressed: () async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    final ok = await revealInFolder(session.firstSavedPath!);
+                    if (!ok && context.mounted) {
+                      await Clipboard.setData(
+                        ClipboardData(text: session.firstSavedPath!),
+                      );
+                      messenger.showSnackBar(
+                        const SnackBar(content: Text('Path copied to clipboard')),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.folder_open_rounded, size: 18),
                 ),
             ],
           ),

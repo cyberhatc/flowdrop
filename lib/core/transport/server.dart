@@ -427,7 +427,12 @@ class FlowDropServer {
       );
       if (session.files.values.every((f) => f.state == 'completed')) {
         session.state = 'completed';
-        _broadcast(ServerEvent.completed(sessionId));
+        _broadcast(ServerEvent.completed(
+          sessionId,
+          savedPaths: session.files.values
+              .map((f) => f.finalFile.path)
+              .toList(growable: false),
+        ));
       }
 
       return _json(

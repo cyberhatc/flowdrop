@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -30,6 +31,7 @@ class AppShell extends ConsumerStatefulWidget {
 class _AppShellState extends ConsumerState<AppShell> {
   int _tab = 0;
   bool _starting = false;
+  bool _dragging = false;
   ShareBridge? _shareBridge;
   final Set<String> _showedOffers = {};
   final Set<_TextKey> _showedTexts = {};
@@ -67,6 +69,23 @@ class _AppShellState extends ConsumerState<AppShell> {
     } finally {
       if (mounted) _starting = false;
     }
+  }
+
+  void _handleDrop(DropDoneDetails details) {
+    setState(() => _dragging = false);
+    final controller = ref.read(appControllerProvider.notifier);
+    final items = details.files
+        .where((file) => file.path.isNotEmpty)
+        .map(
+          (file) => ShareItem(
+            filePath: file.path,
+            name: file.name,
+            mime: file.mimeType ?? 'application/octet-stream',
+          ),
+        )
+        .toList();
+    if (items.isEmpty) return;
+    unawaited(controller.ingestShare(items));
   }
 
   @override
@@ -156,38 +175,83 @@ class _AppShellState extends ConsumerState<AppShell> {
 
     return Scaffold(
       extendBody: true,
-      body: NeonBackground(
-        child: wide
-            ? Row(
-                children: [
-                  NavigationRail(
-                    selectedIndex: _tab,
-                    onDestinationSelected: (i) => setState(() => _tab = i),
-                    labelType:
-                        NavigationRailLabelType.none, // custom labels below
-                    destinations: [
-                      for (var i = 0; i < _labels.length; i++)
-                        NavigationRailDestination(
-                          icon: Badge(
-                            isLabelVisible:
-                                i == 1 && active > 0 || i == 0 && pending > 0,
-                            label: Text(
-                              i == 0 && pending > 0
-                                  ? '$pending'
-                                  : '$active',
-                              style: const TextStyle(fontSize: 9),
-                            ),
-                            child: Icon(_icons[i]),
-                          ),
-                          label: Text(_labels[i]),
+      body: DropTarget(
+        onDragEntered: (_) => setState(() => _dragging = true),
+        onDragExited: (_) => setState(() => _dragging = false),
+        onDragDone: (details) => _handleDrop(details),
+        child: Stack(
+          children: [
+            NeonBackground(
+              child: wide
+                  ? Row(
+                      children: [
+                        NavigationRail(
+                          selectedIndex: _tab,
+                          onDestinationSelected: (i) =>
+                              setState(() => _tab = i),
+                          labelType: NavigationRailLabelType
+                              .none, // custom labels below
+                          destinations: [
+                            for (var i = 0; i < _labels.length; i++)
+                              NavigationRailDestination(
+                                icon: Badge(
+                                  isLabelVisible: i == 1 && active > 0 ||
+                                      i == 0 && pending > 0,
+                                  label: Text(
+                                    i == 0 && pending > 0
+                                        ? '$pending'
+                                        : '$active',
+                                    style: const TextStyle(fontSize: 9),
+                                  ),
+                                  child: Icon(_icons[i]),
+                                ),
+                                label: Text(_labels[i]),
+                              ),
+                          ],
                         ),
-                    ],
+                        const VerticalDivider(width: 1),
+                        Expanded(child: body),
+                      ],
+                    )
+                  : body,
+            ),
+            if (_dragging)
+              IgnorePointer(
+                child: Container(
+                  color: Colors.black.withValues(alpha: 0.55),
+                  alignment: Alignment.center,
+                  child: GlowCard(
+                    accent: scheme.primary,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        GlowIcon(
+                          icon: Icons.cloud_upload_rounded,
+                          size: 56,
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Drop files to send',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'FlowDrop will pick a device to forward them to',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: scheme.onSurface.withValues(alpha: 0.6),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  const VerticalDivider(width: 1),
-                  Expanded(child: body),
-                ],
-              )
-            : body,
+                ),
+              ),
+          ],
+        ),
       ),
       bottomNavigationBar: wide
           ? null

@@ -13,6 +13,7 @@ import '../../core/clipboard/clipboard_sync.dart';
 import '../../core/discovery/discovery_service.dart';
 import '../../core/discovery/network_interfaces.dart';
 import '../../core/discovery/peer.dart';
+import '../../core/protocol/paths.dart';
 import '../../core/discovery/qr_payload.dart';
 import '../../core/protocol/constants.dart';
 import '../../core/protocol/device.dart';
@@ -776,9 +777,17 @@ class AppController extends Notifier<AppState> {
         {
           final sessionId = event.data['sessionId'];
           if (sessionId is String) {
-            _markSession(sessionId, TransferState.completed);
+            final rawPaths = event.data['savedPaths'];
+            final savedPaths = rawPaths is List<dynamic>
+                ? rawPaths.whereType<String>().toList(growable: false)
+                : const <String>[];
+            _markSessionWithSavedPaths(sessionId, savedPaths);
             unawaited(
-              _updateRecordState(sessionId, TransferState.completed),
+              _updateRecordState(
+                sessionId,
+                TransferState.completed,
+                savedPath: savedPaths.isEmpty ? null : savedPaths.first,
+              ),
             );
           }
         }
@@ -1189,6 +1198,22 @@ class AppController extends Notifier<AppState> {
     }
   }
 
+  /// Saves a text payload as a `.txt` file in the receive directory using a
+  /// sanitized filename derived from the sender name.
+  Future<String?> saveTextAsFile(String text, String senderName) async {
+    try {
+      final slug = sanitizeFileName(senderName).replaceAll(RegExp(r'\s+'), '-').toLowerCase();
+      final stamp = DateTime.now().toIso8601String().replaceAll(':', '-').split('.').first;
+      final name = sanitizeFileName('${slug}_${stamp.substring(11)}.txt');
+      final file = File(p.join(_downloadDirectory, name));
+      await file.writeAsString(text, flush: true);
+      _banner('Saved to ${file.path}');
+      return null;
+    } on Object catch (error) {
+      return error.toString();
+    }
+  }
+
   void clearClipboard() {
     if (state.clipboardText != null) {
       _set(state.copyWith(clearClipboard: true));
@@ -1294,6 +1319,29 @@ class AppController extends Notifier<AppState> {
         )
         .toList(growable: false);
     _upsertSession(session.copyWith(files: files, state: next));
+  }
+
+  void _markSessionWithSavedPaths(
+    String sessionId,
+    List<String> savedPaths,
+  ) {
+    final session = _findSession(sessionId);
+    if (session == null) return;
+    final files = session.files
+        .map(
+          (file) => file.copyWith(
+            state: TransferState.completed,
+            transferredBytes: file.totalBytes,
+          ),
+        )
+        .toList(growable: false);
+    _upsertSession(
+      session.copyWith(
+        files: files,
+        state: TransferState.completed,
+        savedPaths: savedPaths,
+      ),
+    );
   }
 
   void _updateFileProgress(

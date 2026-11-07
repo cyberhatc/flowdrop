@@ -155,6 +155,7 @@ class SessionProgress {
     this.state = TransferState.active,
     this.text,
     this.direction,
+    this.savedPaths = const [],
   });
 
   final String sessionId;
@@ -166,6 +167,12 @@ class SessionProgress {
   /// `sent` for outgoing sessions, `received` for incoming ones. Null when the
   /// session was restored from history.
   final TransferDirection? direction;
+
+  /// Final saved paths for received files, from the server completion event.
+  final List<String> savedPaths;
+
+  /// First saved file, or null for outgoing/pending sessions.
+  String? get firstSavedPath => savedPaths.isEmpty ? null : savedPaths.first;
 
   int get totalBytes => files.fold(0, (sum, file) => sum + file.totalBytes);
   int get transferredBytes =>
@@ -179,6 +186,7 @@ class SessionProgress {
   SessionProgress copyWith({
     List<FileProgress>? files,
     TransferState? state,
+    List<String>? savedPaths,
   }) {
     return SessionProgress(
       sessionId: sessionId,
@@ -187,6 +195,7 @@ class SessionProgress {
       state: state ?? this.state,
       text: text,
       direction: direction,
+      savedPaths: savedPaths ?? this.savedPaths,
     );
   }
 }
