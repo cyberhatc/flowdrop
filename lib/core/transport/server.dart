@@ -59,6 +59,11 @@ class FlowDropServer {
   final TrustStore trustStore;
   final PairingTokenManager tokenManager;
 
+  /// When true (visibility = trusted only), offers and text from devices
+  /// that are not in the trust store are declined without a prompt.
+  /// Mutable so the setting can change without restarting the server.
+  bool autoDeclineUntrusted = false;
+
   /// Rebuilt on every request so address changes (Wi-Fi roam) are reflected.
   final DeviceInfo Function(int port) deviceInfoBuilder;
 
@@ -229,6 +234,16 @@ class FlowDropServer {
 
     final remoteIp = _remoteIp(request);
     final trusted = await trustStore.isTrusted(offer.sender.fingerprint);
+    if (autoDeclineUntrusted && !trusted) {
+      return _json(
+        OfferResponse(
+          accepted: false,
+          sessionId: offer.sessionId,
+          reason: 'not_trusted',
+        ).toJson(),
+        status: 200,
+      );
+    }
     final accepted = await onOffer(offer, remoteIp, trusted);
     if (!accepted) {
       return _json(

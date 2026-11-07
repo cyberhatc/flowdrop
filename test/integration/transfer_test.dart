@@ -191,6 +191,41 @@ void main() {
     expect(response.accepted, isFalse);
   });
 
+  test('trusted-only mode auto-declines strangers without a prompt', () async {
+    server.autoDeclineUntrusted = true;
+    addTearDown(() => server.autoDeclineUntrusted = false);
+    final (_, offered) = await makeFile(name: 'stranger.bin', size: 10);
+    final offer = OfferRequest(
+      sessionId: FlowDropClient.newSessionId(),
+      sender: sender.toDeviceInfo(addresses: const ['127.0.0.1'], port: 0),
+      files: [offered],
+    );
+    final c = client();
+    addTearDown(c.close);
+    final response = await c.offer(offer);
+    expect(response.accepted, isFalse);
+    expect(response.reason, 'not_trusted');
+  });
+
+  test('trusted-only mode still allows trusted senders', () async {
+    server.autoDeclineUntrusted = true;
+    await trust.trust(TrustedDevice.fromDevice(sender.toDeviceInfo(
+      addresses: const ['127.0.0.1'],
+      port: 0,
+    )));
+    addTearDown(() => server.autoDeclineUntrusted = false);
+    final (_, offered) = await makeFile(name: 'friend.bin', size: 10);
+    final offer = OfferRequest(
+      sessionId: FlowDropClient.newSessionId(),
+      sender: sender.toDeviceInfo(addresses: const ['127.0.0.1'], port: 0),
+      files: [offered],
+    );
+    final c = client();
+    addTearDown(c.close);
+    final response = await c.offer(offer);
+    expect(response.accepted, isTrue);
+  });
+
   test('text arrives through /v1/text', () async {
     lastText = null;
     final c = client();

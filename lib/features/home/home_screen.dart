@@ -8,6 +8,7 @@ import '../../app/state/app_controller.dart';
 import '../../app/state/app_state.dart';
 import '../../core/discovery/peer.dart';
 import '../../core/security/fingerprint.dart';
+import '../../core/storage/settings.dart';
 import '../../ui/glow.dart';
 import '../connect/manual_connect_dialog.dart';
 import '../qr/qr_screen.dart';
@@ -188,15 +189,23 @@ class _Header extends StatelessWidget {
                   : Icons.lock_open_rounded,
             ),
             StatusPill(
-              label: state.settings.discoveryEnabled
-                  ? (state.udpRunning ? 'Discoverable' : 'Discovery blocked')
-                  : 'Invisible',
-              color: !state.settings.discoveryEnabled
+              label: state.settings.visibility == VisibilityMode.hidden
+                  ? 'Hidden'
+                  : state.settings.visibility == VisibilityMode.trustedOnly
+                      ? 'Trusted only'
+                      : state.settings.discoveryEnabled
+                          ? (state.udpRunning
+                              ? 'Discoverable'
+                              : 'Discovery blocked')
+                          : 'Invisible',
+              color: state.settings.visibility == VisibilityMode.hidden ||
+                      !state.settings.discoveryEnabled
                   ? scheme.onSurface.withValues(alpha: 0.5)
                   : (state.udpRunning ? scheme.secondary : scheme.error),
-              icon: state.settings.discoveryEnabled
-                  ? Icons.wifi_tethering_rounded
-                  : Icons.visibility_off_rounded,
+              icon: state.settings.visibility == VisibilityMode.hidden ||
+                      !state.settings.discoveryEnabled
+                  ? Icons.visibility_off_rounded
+                  : Icons.wifi_tethering_rounded,
             ),
             if (state.serverPort > 0)
               StatusPill(

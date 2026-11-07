@@ -9,6 +9,20 @@ enum AppThemeMode { dark, light, system }
 
 enum AccentColor { cyan, violet, magenta, lime }
 
+/// Who can discover and send to this device (spec §6).
+enum VisibilityMode {
+  /// Unpaired devices show up and can ask; you confirm each transfer.
+  everyone,
+
+  /// Only already-paired devices can talk. Offers from strangers are
+  /// declined automatically, without a prompt.
+  trustedOnly,
+
+  /// No discovery beacons at all — invisible on the LAN. QR code and manual
+  /// address entry still work.
+  hidden,
+}
+
 class AppSettings {
   const AppSettings({
     this.deviceName = '',
@@ -20,6 +34,7 @@ class AppSettings {
     this.clipboardSync = false,
     this.receiveDirectory = '',
     this.onboardingDone = false,
+    this.visibility = VisibilityMode.everyone,
   });
 
   /// Empty means "use the platform default downloads folder".
@@ -40,6 +55,9 @@ class AppSettings {
   /// Set once the user finishes the 3-slide onboarding.
   final bool onboardingDone;
 
+  /// Who may discover/ask this device. Default: everyone.
+  final VisibilityMode visibility;
+
   AppSettings copyWith({
     String? deviceName,
     AppThemeMode? themeMode,
@@ -50,6 +68,7 @@ class AppSettings {
     bool? clipboardSync,
     String? receiveDirectory,
     bool? onboardingDone,
+    VisibilityMode? visibility,
   }) {
     return AppSettings(
       deviceName: deviceName ?? this.deviceName,
@@ -61,6 +80,7 @@ class AppSettings {
       clipboardSync: clipboardSync ?? this.clipboardSync,
       receiveDirectory: receiveDirectory ?? this.receiveDirectory,
       onboardingDone: onboardingDone ?? this.onboardingDone,
+      visibility: visibility ?? this.visibility,
     );
   }
 
@@ -74,6 +94,7 @@ class AppSettings {
         'clipboardSync': clipboardSync,
         'receiveDirectory': receiveDirectory,
         'onboardingDone': onboardingDone,
+        'visibility': visibility.name,
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -93,6 +114,10 @@ class AppSettings {
       clipboardSync: json['clipboardSync'] == true,
       receiveDirectory: json['receiveDirectory'] as String? ?? '',
       onboardingDone: json['onboardingDone'] == true,
+      visibility: VisibilityMode.values.firstWhere(
+        (value) => value.name == json['visibility'],
+        orElse: () => VisibilityMode.everyone,
+      ),
     );
   }
 

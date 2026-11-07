@@ -183,6 +183,8 @@ class AppController extends Notifier<AppState> {
       onClipboard: _handleClipboard,
       onEvent: _handleServerEvent,
     );
+    server.autoDeclineUntrusted =
+        state.settings.visibility == VisibilityMode.trustedOnly;
     await server.start();
     _server = server;
     _set(
@@ -200,7 +202,8 @@ class AppController extends Notifier<AppState> {
     _peerSubscription = null;
     await _discovery?.dispose();
 
-    if (!state.settings.discoveryEnabled) {
+    final hidden = state.settings.visibility == VisibilityMode.hidden;
+    if (!state.settings.discoveryEnabled || hidden) {
       _discovery = null;
       _set(state.copyWith(udpRunning: false, mdnsRunning: false));
       return;
@@ -1028,8 +1031,25 @@ class AppController extends Notifier<AppState> {
     }
 
     if (next.discoveryEnabled != previous.discoveryEnabled ||
-        next.useMdns != previous.useMdns) {
+        next.useMdns != previous.useMdns ||
+        next.visibility != previous.visibility) {
+      if (next.visibility == VisibilityMode.hidden) {
+        _banner('Invisible: discovery is off. QR and manual still work.');
+      }
       await _startDiscovery();
+    }
+
+    if (next.visibility != previous.visibility) {
+      final server = _server;
+      if (server != null) {
+        server.autoDeclineUntrusted =
+            next.visibility == VisibilityMode.trustedOnly;
+      }
+      _banner(switch (next.visibility) {
+        VisibilityMode.everyone => 'Visible to everyone on the LAN',
+        VisibilityMode.trustedOnly => 'Only paired devices can talk to you',
+        VisibilityMode.hidden => 'Hidden: no beacons, QR/manual still work',
+      });
     }
 
     if (next.clipboardSync != previous.clipboardSync) {
@@ -1134,6 +1154,27 @@ class AppController extends Notifier<AppState> {
       return data?.text;
     } on Object {
       return null;
+    }
+  }
+
+  /// Stops or starts the receive server (quick offline mode, spec §6).
+  Future<void> setServerEnabled(bool enabled) async {
+    final server = _server;
+    if (server == null) return;
+    if (enabled) {
+      await server.start();
+      _set(
+        state.copyWith(
+          serverRunning: true,
+          serverPort: server.port,
+          localDevice: _currentLocalDevice,
+        ),
+      );
+      _banner('Server is listening again');
+    } else {
+      await server.stop();
+      _set(state.copyWith(serverRunning: false));
+      _banner('Server stopped — you are offline in FlowDrop');
     }
   }
 

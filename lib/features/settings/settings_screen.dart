@@ -199,6 +199,42 @@ class SettingsScreen extends ConsumerWidget {
             const SizedBox(height: 12),
             SwitchListTile.adaptive(
               contentPadding: EdgeInsets.zero,
+              title: const Text('Server on'),
+              subtitle: const Text(
+                'Stop it to go fully offline: no offers, no discovery.',
+              ),
+              value: state.serverRunning,
+              onChanged: (value) => controller.setServerEnabled(value),
+            ),
+            const SizedBox(height: 14),
+            const _RowLabel('Visible to'),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final mode in VisibilityMode.values)
+                  ChoiceChip(
+                    label: Text(_visibilityLabel(mode)),
+                    selected: settings.visibility == mode,
+                    onSelected: (_) => controller.applySettings(
+                      settings.copyWith(visibility: mode),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _visibilityHint(settings.visibility),
+              style: TextStyle(
+                fontSize: 11.5,
+                height: 1.4,
+                color: scheme.onSurface.withValues(alpha: 0.5),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SwitchListTile.adaptive(
+              contentPadding: EdgeInsets.zero,
               title: const Text('Auto-accept paired devices'),
               subtitle: const Text(
                 'Paired devices can send without a prompt. Unknown devices '
@@ -441,6 +477,31 @@ class SettingsScreen extends ConsumerWidget {
         ),
       ],
     );
+  }
+
+  static String _visibilityLabel(VisibilityMode mode) {
+    switch (mode) {
+      case VisibilityMode.everyone:
+        return 'Everyone';
+      case VisibilityMode.trustedOnly:
+        return 'Trusted only';
+      case VisibilityMode.hidden:
+        return 'Hidden';
+    }
+  }
+
+  static String _visibilityHint(VisibilityMode mode) {
+    switch (mode) {
+      case VisibilityMode.everyone:
+        return 'Any device on the LAN can see you and ask to send. '
+            'You confirm each transfer.';
+      case VisibilityMode.trustedOnly:
+        return 'Only devices in your Trusted list can talk to you. '
+            'Everyone else is declined silently.';
+      case VisibilityMode.hidden:
+        return 'No discovery beacons at all. People can still reach you '
+            'by QR code or IP.';
+    }
   }
 
   static String _themeLabel(AppThemeMode mode) {
