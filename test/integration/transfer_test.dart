@@ -126,6 +126,56 @@ void main() {
     expect(await saved.readAsBytes(), bytes);
   });
 
+  test('folder transfer recreates nested structure', () async {
+    final source = Directory('${tempRoot.path}/folder_src');
+    final fileA = File('${source.path}/trip/day1/a.txt');
+    final fileB = File('${source.path}/trip/day2/b.txt');
+    await fileA.parent.create(recursive: true);
+    await fileA.writeAsBytes(const [1, 2, 3, 4, 5]);
+    await fileB.parent.create(recursive: true);
+    await fileB.writeAsBytes([9, 8, 7]);
+
+    final sessionId = FlowDropClient.newSessionId();
+    final offer = OfferRequest(
+      sessionId: sessionId,
+      sender: sender.toDeviceInfo(addresses: const ['127.0.0.1'], port: 0),
+      files: [
+        OfferedFile(
+          id: FlowDropClient.newSessionId(),
+          name: 'a.txt',
+          size: await fileA.length(),
+          relativePath: 'trip/day1/a.txt',
+        ),
+        OfferedFile(
+          id: FlowDropClient.newSessionId(),
+          name: 'b.txt',
+          size: await fileB.length(),
+          relativePath: 'trip/day2/b.txt',
+        ),
+      ],
+    );
+
+    final c = client();
+    addTearDown(c.close);
+    final response = await c.offer(offer);
+    expect(response.accepted, isTrue);
+    for (final offeredFile in offer.files) {
+      final local = offeredFile.relativePath == 'trip/day1/a.txt'
+          ? fileA.path
+          : fileB.path;
+      final result = await c.uploadFile(
+        file: offeredFile,
+        localPath: local,
+        uploadPath: response.uploadUrls[offeredFile.id]!,
+      );
+      expect(result.savedPath, offeredFile.relativePath);
+      expect(
+        await File('${downloads.path}/${result.savedPath!}').readAsBytes(),
+        await File(local).readAsBytes(),
+      );
+    }
+  });
+
   test('declined offers are reported', () async {
     approveOffers = false;
     addTearDown(() => approveOffers = true);

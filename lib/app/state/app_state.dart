@@ -16,12 +16,17 @@ class SendFile {
     required this.name,
     required this.size,
     this.mime = 'application/octet-stream',
+    this.relativePath,
   });
 
   final String path;
   final String name;
   final int size;
   final String mime;
+
+  /// Sanitized relative path for folder transfers (e.g. `trip/a.jpg`).
+  /// Null for files picked individually.
+  final String? relativePath;
 }
 
 /// An offer waiting for the user's Accept/Decline decision.

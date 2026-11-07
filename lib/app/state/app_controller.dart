@@ -537,6 +537,7 @@ class AppController extends Notifier<AppState> {
             name: file.name,
             size: file.size,
             mime: file.mime,
+            relativePath: file.relativePath,
           ),
         )
         .toList(growable: false);

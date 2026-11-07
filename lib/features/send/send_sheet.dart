@@ -6,8 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/state/app_controller.dart';
 import '../../../app/state/app_state.dart';
+import '../../../core/protocol/constants.dart';
 import '../../../core/protocol/device.dart';
 import '../../../core/transfer/checksum.dart';
+import '../../../core/transfer/folder_scan.dart';
 import '../../../ui/glow.dart';
 
 Future<void> showSendSheet(BuildContext context, DeviceInfo peer) {
@@ -61,6 +63,52 @@ class _SendSheetState extends ConsumerState<_SendSheet> {
       if (mounted) setState(() {});
     } on Object catch (error) {
       if (mounted) setState(() => _error = 'Could not open files: $error');
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
+  }
+
+  Future<void> _pickFolder() async {
+    setState(() {
+      _picking = true;
+      _error = null;
+    });
+    try {
+      final picked = await getDirectoryPath(confirmButtonText: 'Select folder');
+      if (picked != null && picked.isNotEmpty) {
+        final result = await scanFolder(picked);
+        if (result.entries.isEmpty) {
+          if (mounted) {
+            setState(() => _error =
+                'That folder is empty or nothing inside can be sent.');
+          }
+        } else {
+          for (final entry in result.entries) {
+            _files.add(
+              SendFile(
+                path: entry.fullPath,
+                name: entry.relativePath,
+                size: entry.size,
+                relativePath: entry.relativePath,
+              ),
+            );
+          }
+          if (mounted) {
+            setState(() {
+              final notes = <String>[
+                'Added ${result.entries.length} file${result.entries.length == 1 ? '' : 's'} from ${picked.split('\\').last}',
+                if (result.skipped > 0) '${result.skipped} skipped',
+                if (result.truncated)
+                  'only the first ${FlowDropProtocol.maxFilesPerOffer} files',
+              ];
+              _error = notes.join(' · ');
+            });
+          }
+        }
+      }
+      if (mounted) setState(() {});
+    } on Object catch (error) {
+      if (mounted) setState(() => _error = 'Could not open folder: $error');
     } finally {
       if (mounted) setState(() => _picking = false);
     }
@@ -150,6 +198,13 @@ class _SendSheetState extends ConsumerState<_SendSheet> {
                   label: _picking ? 'Choosing…' : 'Choose files',
                   icon: Icons.attach_file_rounded,
                   onPressed: _picking ? null : _pickFiles,
+                ),
+                const SizedBox(width: 12),
+                GlowButton(
+                  label: 'Folder',
+                  icon: Icons.folder_open_rounded,
+                  tone: GlowTone.ghost,
+                  onPressed: _picking ? null : _pickFolder,
                 ),
                 const SizedBox(width: 12),
                 StatusPill(
