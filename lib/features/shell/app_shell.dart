@@ -10,9 +10,11 @@ import '../../features/history/history_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/incoming/incoming_dialogs.dart';
 import '../../features/onboarding/onboarding_screen.dart';
+import '../../features/qr/qr_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../features/share/share_bridge.dart';
 import '../../features/share/share_sheet.dart';
+import '../../features/shell/shell_shortcuts.dart';
 import '../../features/transfers/transfers_screen.dart';
 import '../../ui/glow.dart';
 
@@ -173,7 +175,18 @@ class _AppShellState extends ConsumerState<AppShell> {
     final wide = MediaQuery.sizeOf(context).width >= 760;
     final body = IndexedStack(index: _tab, children: _pages);
 
-    return Scaffold(
+    // Desktop keyboard support (spec §7): tabs, QR screen and clipboard
+    // push without touching the mouse.
+    final shortcuts = shellShortcuts(
+      onTab: (index) => setState(() => _tab = index),
+      onQr: () => showQrScreen(context),
+      onClipboard: controller.pushClipboardNow,
+      onRefresh: controller.refreshNearby,
+    );
+
+    return CallbackShortcuts(
+      bindings: shortcuts,
+      child: Scaffold(
       extendBody: true,
       body: DropTarget(
         onDragEntered: (_) => setState(() => _dragging = true),
@@ -319,6 +332,7 @@ class _AppShellState extends ConsumerState<AppShell> {
               child: const Icon(Icons.lock_rounded),
             )
           : null,
+      ),
     );
   }
 }
