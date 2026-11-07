@@ -9,6 +9,8 @@ import '../../features/history/history_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/incoming/incoming_dialogs.dart';
 import '../../features/settings/settings_screen.dart';
+import '../../features/share/share_bridge.dart';
+import '../../features/share/share_sheet.dart';
 import '../../features/transfers/transfers_screen.dart';
 import '../../ui/glow.dart';
 
@@ -27,6 +29,7 @@ class AppShell extends ConsumerStatefulWidget {
 class _AppShellState extends ConsumerState<AppShell> {
   int _tab = 0;
   bool _starting = false;
+  ShareBridge? _shareBridge;
   final Set<String> _showedOffers = {};
   final Set<_TextKey> _showedTexts = {};
 
@@ -56,9 +59,19 @@ class _AppShellState extends ConsumerState<AppShell> {
     _starting = true;
     try {
       await ref.read(appControllerProvider.notifier).init();
+      // Share sheet bridge (Android SEND intent + iOS with extension).
+      _shareBridge =
+          ShareBridge(ref.read(appControllerProvider.notifier));
+      unawaited(_shareBridge?.attach());
     } finally {
       if (mounted) _starting = false;
     }
+  }
+
+  @override
+  void dispose() {
+    _shareBridge?.dispose();
+    super.dispose();
   }
 
   @override
@@ -104,6 +117,16 @@ class _AppShellState extends ConsumerState<AppShell> {
           });
         }
       }
+    });
+
+    // Shares that arrived through the OS share sheet.
+    ref.listen<List<ShareItem>>(
+        appControllerProvider.select((s) => s.pendingShare), (previous, next) {
+      if (next.isEmpty || previous == next) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        showShareSheet(context, next);
+      });
     });
 
     if (state.fatalError != null && !state.ready) {

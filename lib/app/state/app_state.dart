@@ -78,6 +78,23 @@ class ClipboardEntry {
   final bool outgoing;
 }
 
+/// A file or text that arrived through the OS share sheet (Phase 7).
+class ShareItem {
+  const ShareItem({this.filePath, this.name, this.text, this.size = 0, this.mime = 'application/octet-stream'});
+
+  /// Local file path when the item is a file.
+  final String? filePath;
+  final String? name;
+
+  /// Text/URL payload when the item is text-like.
+  final String? text;
+  final int size;
+  final String mime;
+
+  bool get isFile => filePath != null && filePath!.isNotEmpty;
+  String get displayName => name ?? (text ?? 'Shared item');
+}
+
 class AppState {
   const AppState({
     this.ready = false,
@@ -102,6 +119,7 @@ class AppState {
     this.clipboardText,
     this.clipboardFrom,
     this.clipboardHistory = const [],
+    this.pendingShare = const [],
   });
 
   final bool ready;
@@ -141,6 +159,10 @@ class AppState {
 
   /// Last 20 clipboard payloads (incoming and outgoing), newest first.
   final List<ClipboardEntry> clipboardHistory;
+
+  /// Files/text that arrived through the OS share sheet and are waiting for
+  /// the user to pick a target device.
+  final List<ShareItem> pendingShare;
 
   String get deviceName =>
       settings.deviceName.isNotEmpty ? settings.deviceName : 'This device';
@@ -197,6 +219,8 @@ class AppState {
     String? clipboardFrom,
     bool clearClipboard = false,
     List<ClipboardEntry>? clipboardHistory,
+    List<ShareItem>? pendingShare,
+    bool clearPendingShare = false,
   }) {
     return AppState(
       ready: ready ?? this.ready,
@@ -223,6 +247,9 @@ class AppState {
       clipboardFrom:
           clearClipboard ? null : (clipboardFrom ?? this.clipboardFrom),
       clipboardHistory: clipboardHistory ?? this.clipboardHistory,
+      pendingShare: clearPendingShare
+          ? const []
+          : (pendingShare ?? this.pendingShare),
     );
   }
 }

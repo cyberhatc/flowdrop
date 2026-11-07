@@ -456,6 +456,62 @@ class AppController extends Notifier<AppState> {
   // Outgoing
   // ---------------------------------------------------------------------------
 
+  /// Ingests items that arrived through the OS share sheet. Each text item
+  /// becomes a text entry; each file path becomes a [SendFile] (missing or
+  /// unreadable files are skipped with a banner so one bad file never blocks
+  /// the rest).
+  Future<void> ingestShare(List<ShareItem> items) async {
+    final files = <SendFile>[];
+    final texts = <String>[];
+    for (final item in items) {
+      if (item.isFile) {
+        final path = item.filePath!;
+        try {
+          final file = File(path);
+          final size = await file.length();
+          final name = item.name ?? p.basename(path);
+          files.add(SendFile(
+            path: path,
+            name: name,
+            size: size,
+            mime: item.mime,
+          ));
+        } on Object {
+          _banner('Skipped unreadable shared file: ${item.displayName}');
+        }
+      } else if (item.text != null && (item.text ?? '').trim().isNotEmpty) {
+        texts.add(item.text!.trim());
+      }
+    }
+    if (files.isEmpty && texts.isEmpty) return;
+    _set(
+      state.copyWith(
+        pendingShare: [
+          ...files.map(
+            (f) => ShareItem(
+              filePath: f.path,
+              name: f.name,
+              size: f.size,
+              mime: f.mime,
+            ),
+          ),
+          ...texts.map((t) => ShareItem(text: t)),
+        ],
+      ),
+    );
+    _banner(
+      files.isEmpty
+          ? 'Shared text ready — pick a device'
+          : 'Shared ${files.length} item${files.length == 1 ? '' : 's'} — pick a device',
+    );
+  }
+
+  void clearPendingShare() {
+    if (state.pendingShare.isNotEmpty) {
+      _set(state.copyWith(clearPendingShare: true));
+    }
+  }
+
   Future<String?> sendToPeer({
     required DeviceInfo peer,
     required List<SendFile> files,
