@@ -1,8 +1,9 @@
 // All plugins default to different JVM targets (1.8 vs 17 vs 25)
-// which recent AGP refuses to build. Force 17 everywhere, after each
-// project has been evaluated so plugin defaults cannot win.
-allprojects {
-    afterEvaluate {
+// which recent AGP refuses to build. Force 17 everywhere — but only
+// after every project (and its plugins) has been evaluated, otherwise
+// the plugin's own defaults overwrite these values.
+gradle.projectsEvaluated {
+    allprojects {
         tasks.withType<JavaCompile>().configureEach {
             sourceCompatibility = JavaVersion.VERSION_17.toString()
             targetCompatibility = JavaVersion.VERSION_17.toString()
