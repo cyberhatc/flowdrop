@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/app_localizations.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+
 import '../core/storage/settings.dart';
 import 'state/app_controller.dart';
 import 'theme.dart';
@@ -26,7 +29,7 @@ class FlowDropApp extends ConsumerWidget {
         : FlowDropTheme.light(settings.accent);
 
     return MaterialApp(
-      title: 'FlowDrop',
+      title: AppLocalizations.of(context)?.appTitle ?? 'FlowDrop',
       debugShowCheckedModeBanner: false,
       theme: theme,
       darkTheme: FlowDropTheme.dark(settings.accent),
@@ -35,6 +38,13 @@ class FlowDropApp extends ConsumerWidget {
         AppThemeMode.light => ThemeMode.light,
         AppThemeMode.system => ThemeMode.system,
       },
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: AppLocalizations.supportedLocales,
       home: const AppShell(),
     );
   }
