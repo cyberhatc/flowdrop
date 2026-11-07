@@ -16,6 +16,10 @@ jobs:
         with:
           flutter-version: '3.47.9'
       - run: flutter pub get
+      # Flutter 3.47 expects compileSdk 37 (receive_sharing_intent needs it)
+      - run: sdkmanager "platforms;android-37" "build-tools;37.0.0"
+        env:
+          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
       - run: flutter build apk --release
       - run: flutter build appbundle --release
       - uses: softprops/action-gh-release@v2
