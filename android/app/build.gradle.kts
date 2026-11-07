@@ -6,8 +6,7 @@ plugins {
 
 android {
     namespace = "dev.cyberhatc.flowdrop"
-    // receive_sharing_intent 1.9.0 requires 37
-    compileSdk = 37
+    compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
