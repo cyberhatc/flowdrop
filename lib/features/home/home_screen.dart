@@ -47,8 +47,9 @@ class HomeScreen extends ConsumerWidget {
                 );
                 final side = _QuickActions(
                   state: state,
-                  hasPeers: peers.isNotEmpty,
+                  hasPeers: peers.any((peer) => peer.isLive),
                   onRefresh: controller.refreshNearby,
+                  onReconnect: controller.reconnectPaired,
                   onSendClipboard: controller.pushClipboardNow,
                 );
                 if (!wide) {
@@ -74,13 +75,19 @@ class HomeScreen extends ConsumerWidget {
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(width: 10),
-                if (peers.isNotEmpty)
+                if (peers.any((peer) => peer.isLive))
                   StatusPill(
-                    label: '${peers.length}',
+                    label: '${peers.where((peer) => peer.isLive).length}',
                     color: scheme.primary,
                     icon: Icons.radar_rounded,
                   ),
                 const Spacer(),
+                if (state.trustedDevices.isNotEmpty)
+                  TextButton.icon(
+                    onPressed: controller.reconnectPaired,
+                    icon: const Icon(Icons.sync_rounded, size: 17),
+                    label: const Text('Reconnect paired'),
+                  ),
                 IconButton(
                   tooltip: 'Refresh',
                   onPressed: controller.refreshNearby,
@@ -97,6 +104,7 @@ class HomeScreen extends ConsumerWidget {
                   peer: peer,
                   trusted: _isTrusted(state, peer),
                   onTap: () => showSendSheet(context, peer.device),
+                  onReconnect: controller.reconnectPaired,
                 ),
                 const SizedBox(height: 10),
               ],
@@ -422,42 +430,50 @@ class _PeerBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final tint = trusted ? scheme.primary : scheme.secondary;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Column(
-        children: [
-          Container(
-            width: 50,
-            height: 50,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: tint.withValues(alpha: 0.14),
-              border: Border.all(color: tint.withValues(alpha: 0.45)),
-              boxShadow: [
-                BoxShadow(
-                  color: tint.withValues(alpha: 0.25),
-                  blurRadius: 14,
-                  spreadRadius: -2,
-                ),
-              ],
+    return Opacity(
+      opacity: peer.isLive ? 1 : 0.45,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Column(
+          children: [
+            Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: tint.withValues(alpha: 0.14),
+                border: Border.all(color: tint.withValues(alpha: 0.45)),
+                boxShadow: [
+                  BoxShadow(
+                    color: tint.withValues(alpha: 0.25),
+                    blurRadius: 14,
+                    spreadRadius: -2,
+                  ),
+                ],
+              ),
+              child: Icon(
+                _platformIcon(peer.device.platform),
+                color: tint,
+                size: 24,
+              ),
             ),
-            child: Icon(
-              _platformIcon(peer.device.platform),
-              color: tint,
-              size: 24,
+            const SizedBox(height: 5),
+            Text(
+              peer.device.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
             ),
-          ),
-          const SizedBox(height: 5),
-          Text(
-            peer.device.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
-          ),
-          if (trusted) Icon(Icons.verified_rounded, size: 11, color: tint),
-        ],
+            if (trusted)
+              Icon(
+                peer.isLive ? Icons.verified_rounded : Icons.cloud_off_rounded,
+                size: 11,
+                color: tint,
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -468,12 +484,14 @@ class _QuickActions extends StatelessWidget {
     required this.state,
     required this.hasPeers,
     required this.onRefresh,
+    required this.onReconnect,
     required this.onSendClipboard,
   });
 
   final AppState state;
   final bool hasPeers;
   final Future<void> Function() onRefresh;
+  final Future<void> Function() onReconnect;
   final Future<void> Function() onSendClipboard;
 
   @override
@@ -514,6 +532,14 @@ class _QuickActions extends StatelessWidget {
             tone: GlowTone.ghost,
             expanded: true,
             onPressed: () => showManualConnectDialog(context),
+          ),
+          const SizedBox(height: 10),
+          GlowButton(
+            label: 'Reconnect paired devices',
+            icon: Icons.sync_rounded,
+            tone: GlowTone.ghost,
+            expanded: true,
+            onPressed: () => onReconnect(),
           ),
           const SizedBox(height: 10),
           GlowButton(
@@ -627,16 +653,19 @@ class _PeerTile extends StatelessWidget {
     required this.peer,
     required this.trusted,
     required this.onTap,
+    required this.onReconnect,
   });
 
   final Peer peer;
   final bool trusted;
   final VoidCallback onTap;
+  final VoidCallback onReconnect;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final device = peer.device;
+    final live = peer.isLive;
     return GlowCard(
       glow: false,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
@@ -678,8 +707,9 @@ class _PeerTile extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  '${device.addresses.isEmpty ? 'No address' : device.addresses.first}'
-                  ' · ${_sourceLabel(peer.source)} · ${_platformLabel(device.platform)}',
+                  '${device.addresses.isEmpty ? 'Address saved · searching' : '${device.addresses.first}:${device.port}'}'
+                  ' · ${_sourceLabel(peer.source)} · ${_platformLabel(device.platform)}'
+                  '${live ? '' : ' · offline'}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -692,14 +722,32 @@ class _PeerTile extends StatelessWidget {
           ),
           const SizedBox(width: 10),
           StatusPill(
-            label: trusted ? 'Paired' : 'New',
-            color: trusted
-                ? scheme.primary
-                : scheme.onSurface.withValues(alpha: 0.55),
-            icon: trusted ? Icons.verified_rounded : Icons.fiber_new_rounded,
+            label: trusted
+                ? (live ? 'Paired' : 'Offline')
+                : (live ? 'New' : 'Saved'),
+            color: live
+                ? (trusted
+                      ? scheme.primary
+                      : scheme.onSurface.withValues(alpha: 0.55))
+                : scheme.onSurface.withValues(alpha: 0.45),
+            icon: live
+                ? (trusted ? Icons.verified_rounded : Icons.fiber_new_rounded)
+                : Icons.cloud_off_rounded,
           ),
           const SizedBox(width: 8),
-          Icon(Icons.send_rounded, size: 18, color: scheme.primary),
+          if (live)
+            Icon(Icons.send_rounded, size: 18, color: scheme.primary)
+          else
+            IconButton(
+              tooltip: 'Reconnect ${device.name}',
+              visualDensity: VisualDensity.compact,
+              onPressed: onReconnect,
+              icon: Icon(
+                Icons.sync_rounded,
+                size: 18,
+                color: scheme.onSurface.withValues(alpha: 0.6),
+              ),
+            ),
         ],
       ),
     );
@@ -794,5 +842,7 @@ String _sourceLabel(PeerSource source) {
       return 'Paired';
     case PeerSource.manual:
       return 'Manual';
+    case PeerSource.paired:
+      return 'Paired';
   }
 }

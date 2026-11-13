@@ -7,17 +7,31 @@ flutter analyze
 flutter test
 ```
 
-- `test/protocol/` — model validation, path sanitisation, duplicate names.
-- `test/security/` — fingerprint parsing, QR payload expiry, pairing tokens,
-  rate limiting.
-- `test/transport/` — in-process sender/receiver over loopback: offer, accept,
-  upload, checksum, decline, cancel, resume, path-traversal rejection, wrong
-  fingerprint.
-- `test/discovery/` — UDP beacon encode/decode, QR round-trip, interface
-  filtering.
+- `test/core/` — model validation, path sanitisation, duplicate names,
+  fingerprints, QR payload expiry, pairing tokens, rate limiting, trust-store
+  persistence, peer presence, clipboard loop prevention, folder scanning.
+- `test/integration/` — in-process sender/receiver over loopback TLS: offer,
+  accept, upload, checksum, decline, cancel, resume, path-traversal rejection,
+  wrong fingerprint, and a 128 MiB streaming transfer.
+- `test/share/`, `test/shell/` — share-intent parsing and keyboard shortcuts.
 
 The transport tests start two real `FlowDropServer` instances with generated
 certificates, so they exercise TLS, HTTP routing, streaming and hashing.
+
+## Screenshots
+
+The images in `docs/screenshots/` are golden files generated from the real
+widgets:
+
+```sh
+# PowerShell
+$env:FLOWDROP_SCREENSHOTS = "1"
+flutter test --update-goldens test/screenshots_test.dart
+```
+
+The test is skipped unless that variable is set, so CI does not depend on
+platform fonts. Regenerate them after any visible UI change and commit the
+PNGs with the code.
 
 ## Benchmark
 

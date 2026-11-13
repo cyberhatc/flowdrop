@@ -53,13 +53,14 @@ class FlowDropClient {
     required this.identity,
     required this.localDevice,
     required String expectedFingerprint,
+    Duration connectionTimeout = const Duration(seconds: 8),
   }) : host = host,
        port = port,
        expectedFingerprint = normalizeFingerprint(expectedFingerprint),
        _base = Uri(scheme: 'https', host: host, port: port) {
     _http = createPinnedHttpClient(
       expectedFingerprint: expectedFingerprint,
-      connectionTimeout: const Duration(seconds: 8),
+      connectionTimeout: connectionTimeout,
     );
   }
 

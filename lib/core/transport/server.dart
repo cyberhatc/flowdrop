@@ -106,7 +106,11 @@ class FlowDropServer {
           candidate,
           securityContext: context,
         );
+        // Large transfers (multi-GB) can pause briefly while the sender
+        // reconnects or the Wi-Fi roams. Do not kill the receive socket.
+        _server!.idleTimeout = const Duration(minutes: 10);
         _port = _server!.port;
+        await _cleanupStaleStaging();
         return;
       } on SocketException catch (error) {
         lastError = error;
@@ -231,6 +235,7 @@ class FlowDropServer {
     if (_sessions.containsKey(offer.sessionId)) {
       return _error(409, 'conflict', 'Session already exists');
     }
+    _pruneSessions();
 
     final remoteIp = _remoteIp(request);
     final trusted = await trustStore.isTrusted(offer.sender.fingerprint);
@@ -442,6 +447,10 @@ class FlowDropServer {
       );
       if (session.files.values.every((f) => f.state == 'completed')) {
         session.state = 'completed';
+        // Everything has been moved into the download folder; the staging
+        // directory only holds empty subfolders now. Removing it keeps a
+        // multi-GB receive from leaving clutter behind.
+        await _deleteQuietly(session.directory);
         _broadcast(
           ServerEvent.completed(
             sessionId,
@@ -554,6 +563,47 @@ class FlowDropServer {
   // Session helpers
   // ---------------------------------------------------------------------------
 
+  /// Drops metadata for finished sessions so a long-running app with many
+  /// transfers does not grow without bound. Staging directories are removed
+  /// as soon as a session completes.
+  void _pruneSessions() {
+    final now = DateTime.now();
+    _sessions.removeWhere(
+      (_, session) =>
+          session.state == 'completed' &&
+          now.difference(session.createdAt) > const Duration(hours: 2),
+    );
+    if (_sessions.length <= 200) return;
+    final oldest = _sessions.entries.toList()
+      ..sort((a, b) => a.value.createdAt.compareTo(b.value.createdAt));
+    for (final entry in oldest.take(_sessions.length - 200)) {
+      _sessions.remove(entry.key);
+    }
+  }
+
+  /// Removes abandoned `.part` staging directories left by a previous run.
+  /// Only entries older than a day are touched so a second FlowDrop instance
+  /// sharing the same download folder is never disturbed.
+  Future<void> _cleanupStaleStaging() async {
+    final staging = Directory(p.join(downloadDirectory, '.flowdrop_incoming'));
+    try {
+      if (!await staging.exists()) return;
+      final cutoff = DateTime.now().subtract(const Duration(days: 1));
+      await for (final entity in staging.list(followLinks: false)) {
+        try {
+          final stat = await entity.stat();
+          if (stat.modified.isBefore(cutoff)) {
+            await _deleteQuietly(entity);
+          }
+        } on FileSystemException {
+          // Skip entries we cannot inspect.
+        }
+      }
+    } on FileSystemException {
+      // Staging cleanup is best effort.
+    }
+  }
+
   Future<void> _planFiles(_ReceiveSession session) async {
     final reserved = <String>{};
     for (final file in session.offer.files) {
@@ -596,9 +646,25 @@ class FlowDropServer {
       existing.add(p.basename(entity.path));
     }
     final unique = dedupeFileName(p.basename(candidate.path), existing);
-    candidate = File(p.join(directory.path, unique));
+    candidate = File(_fitPath(directory.path, unique));
     reserved.add(p.join(p.dirname(relativePath), unique).toLowerCase());
     return candidate;
+  }
+
+  /// Windows still rejects paths over 260 characters unless long-path support
+  /// is enabled. Shorten the file name (never the folder) so deep folder
+  /// transfers do not fail after gigabytes have already been streamed.
+  String _fitPath(String directory, String name) {
+    final full = p.join(directory, name);
+    if (!Platform.isWindows || full.length <= 240) return full;
+    final extension = p.extension(name);
+    final suffix =
+        '~${name.hashCode.toRadixString(16).padLeft(4, '0').substring(0, 4)}';
+    final base = p.basenameWithoutExtension(name);
+    final room = 240 - directory.length - 1 - suffix.length - extension.length;
+    if (room <= 1 || base.isEmpty) return full;
+    final trimmed = base.length <= room ? base : base.substring(0, room);
+    return p.join(directory, '$trimmed$suffix$extension');
   }
 
   bool _isInside(String root, String candidate) {
@@ -756,6 +822,7 @@ class _ReceiveSession {
   final Directory directory;
   final Directory root;
   final Map<String, _ReceiveFile> files = {};
+  final DateTime createdAt = DateTime.now();
   String state = 'pending';
 }
 

@@ -39,11 +39,20 @@ class FlowDropProtocol {
   /// Streams per session. A single large file uses one stream.
   static const int maxParallelUploads = 3;
 
-  /// Peers disappear from the radar after this much silence.
-  static const Duration peerTimeout = Duration(seconds: 6);
+  /// A discovered peer is considered live while it has been seen this
+  /// recently. Kept comfortably above [beaconInterval] so a single dropped
+  /// datagram (or a phone briefly dozing) does not make a device vanish.
+  static const Duration peerTimeout = Duration(seconds: 30);
 
   /// How often the UDP beacon announces this device.
   static const Duration beaconInterval = Duration(milliseconds: 1500);
+
+  /// How often paired devices that are not currently visible are probed over
+  /// HTTPS so they reappear after a restart, a Wi-Fi change or a long sleep.
+  static const Duration pairedProbeInterval = Duration(seconds: 10);
+
+  /// Backoff before retrying a paired device that did not answer.
+  static const Duration pairedRetryDelay = Duration(seconds: 30);
 
   static const String scheme = 'flowdrop';
   static const String connectHost = 'connect';

@@ -192,27 +192,36 @@ class _SendSheetState extends ConsumerState<_SendSheet> {
             const SizedBox(height: 20),
             Row(
               children: [
-                GlowButton(
-                  label: _picking ? 'Choosing…' : 'Choose files',
-                  icon: Icons.attach_file_rounded,
-                  onPressed: _picking ? null : _pickFiles,
+                Expanded(
+                  child: GlowButton(
+                    label: _picking ? 'Choosing…' : 'Choose files',
+                    icon: Icons.attach_file_rounded,
+                    expanded: true,
+                    onPressed: _picking ? null : _pickFiles,
+                  ),
                 ),
                 const SizedBox(width: 12),
-                GlowButton(
-                  label: 'Folder',
-                  icon: Icons.folder_open_rounded,
-                  tone: GlowTone.ghost,
-                  onPressed: _picking ? null : _pickFolder,
-                ),
-                const SizedBox(width: 12),
-                StatusPill(
-                  label: _files.isEmpty
-                      ? 'No files selected'
-                      : '${_files.length} file${_files.length == 1 ? '' : 's'}',
-                  color: _files.isEmpty ? scheme.onSurface : scheme.primary,
-                  icon: Icons.folder_rounded,
+                Expanded(
+                  child: GlowButton(
+                    label: 'Folder',
+                    icon: Icons.folder_open_rounded,
+                    tone: GlowTone.ghost,
+                    expanded: true,
+                    onPressed: _picking ? null : _pickFolder,
+                  ),
                 ),
               ],
+            ),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: StatusPill(
+                label: _files.isEmpty
+                    ? 'No files selected'
+                    : '${_files.length} file${_files.length == 1 ? '' : 's'}',
+                color: _files.isEmpty ? scheme.onSurface : scheme.primary,
+                icon: Icons.folder_rounded,
+              ),
             ),
             if (_files.isNotEmpty) ...[
               const SizedBox(height: 12),

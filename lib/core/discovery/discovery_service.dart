@@ -14,6 +14,7 @@ class DiscoveryService {
     PeerRegistry? registry,
     this.broadcast = true,
     this.useMdns = true,
+    this.isPaired,
     this.onError,
   }) : registry = registry ?? PeerRegistry();
 
@@ -21,6 +22,10 @@ class DiscoveryService {
   final PeerRegistry registry;
   final bool broadcast;
   final bool useMdns;
+
+  /// Tells discovery whether a device id is already paired, so its peer entry
+  /// is pinned and never pruned.
+  final bool Function(String deviceId)? isPaired;
   final void Function(Object error)? onError;
 
   UdpBeaconService? _udp;
@@ -43,6 +48,7 @@ class DiscoveryService {
         onDevice: (device, source) => registry.upsert(
           device.copyWith(addresses: _mergeAddress(device.addresses, source)),
           source: PeerSource.udp,
+          pinned: isPaired?.call(device.id) ?? false,
         ),
         onError: onError,
       );
@@ -56,7 +62,11 @@ class DiscoveryService {
     }
     if (useMdns) {
       final mdns = MdnsDiscoveryService(
-        onDevice: (device) => registry.upsert(device, source: PeerSource.mdns),
+        onDevice: (device) => registry.upsert(
+          device,
+          source: PeerSource.mdns,
+          pinned: isPaired?.call(device.id) ?? false,
+        ),
         onError: onError,
       );
       _mdns = mdns;
@@ -71,11 +81,30 @@ class DiscoveryService {
   }
 
   void addManual(DeviceInfo device) {
-    registry.upsert(device, source: PeerSource.manual);
+    registry.upsert(
+      device,
+      source: PeerSource.manual,
+      pinned: isPaired?.call(device.id) ?? false,
+    );
   }
 
   void addFromQr(DeviceInfo device) {
-    registry.upsert(device, source: PeerSource.qr);
+    registry.upsert(device, source: PeerSource.qr, pinned: true);
+  }
+
+  /// Adds a paired device from the trust store, keeping its persisted
+  /// `lastSeen` so the UI can show it as offline until a probe succeeds.
+  void seedPaired(DeviceInfo device, {DateTime? lastSeen}) {
+    registry.seedPaired(device, lastSeen: lastSeen);
+  }
+
+  /// Refreshes a paired device after a successful probe.
+  void markPairedOnline(DeviceInfo device) {
+    registry.upsert(device, source: PeerSource.paired, pinned: true);
+  }
+
+  void removePaired(String deviceId) {
+    registry.remove(deviceId);
   }
 
   Future<void> refresh() async {

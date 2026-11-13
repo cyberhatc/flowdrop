@@ -58,6 +58,10 @@ class AppController extends Notifier<AppState> {
 
   StreamSubscription<List<Peer>>? _peerSubscription;
   Timer? _addressTimer;
+  Timer? _presenceTimer;
+  final Set<String> _probing = {};
+  final Map<String, DateTime> _nextProbe = {};
+  final Map<String, ({int bytes, DateTime at})> _speedSamples = {};
 
   // Clipboard sync (opt-in). The watcher polls the OS clipboard; the guard
   // remembers remote payloads so received values are never re-pushed.
@@ -140,6 +144,11 @@ class AppController extends Notifier<AppState> {
       );
 
       await _startDiscovery();
+      _seedPairedPeers(trusted);
+      _presenceTimer = Timer.periodic(
+        FlowDropProtocol.pairedProbeInterval,
+        (_) => unawaited(_probePairedPeers()),
+      );
       _addressTimer = Timer.periodic(
         const Duration(seconds: 20),
         (_) => unawaited(refreshAddresses()),
@@ -205,15 +214,17 @@ class AppController extends Notifier<AppState> {
     await _discovery?.dispose();
 
     final hidden = state.settings.visibility == VisibilityMode.hidden;
-    if (!state.settings.discoveryEnabled || hidden) {
-      _discovery = null;
-      _set(state.copyWith(udpRunning: false, mdnsRunning: false));
-      return;
-    }
+    // In hidden / discovery-off mode we keep a passive registry alive instead
+    // of dropping discovery entirely: paired devices still appear and can be
+    // reconnected by address even when this device is invisible.
+    final passive = !state.settings.discoveryEnabled || hidden;
 
     final discovery = DiscoveryService(
       deviceInfo: () => _currentLocalDevice ?? _fallbackDevice,
-      useMdns: state.settings.useMdns,
+      broadcast: !passive,
+      useMdns: !passive && state.settings.useMdns,
+      isPaired: (deviceId) =>
+          state.trustedDevices.any((device) => device.deviceId == deviceId),
       onError: (_) {
         // Discovery is best effort. A firewall hint is shown in the UI.
       },
@@ -224,6 +235,7 @@ class AppController extends Notifier<AppState> {
     } on Object {
       // QR and manual connect still work.
     }
+    _seedPairedPeers(state.trustedDevices);
     _peerSubscription = discovery.peers.listen((peers) {
       _set(state.copyWith(peers: peers));
     });
@@ -281,6 +293,179 @@ class AppController extends Notifier<AppState> {
   }
 
   // ---------------------------------------------------------------------------
+  // Paired-device presence (stay reachable after restarts / Wi-Fi changes)
+  // ---------------------------------------------------------------------------
+
+  /// Puts every paired device on the radar, even if it is not beaconing right
+  /// now. This is what stops a paired phone from vanishing after an app
+  /// restart and makes "send to my laptop" a one-tap action later.
+  void _seedPairedPeers(List<TrustedDevice> devices) {
+    final discovery = _discovery;
+    if (discovery == null) return;
+    for (final device in devices) {
+      discovery.seedPaired(device.toDeviceInfo(), lastSeen: device.lastSeen);
+    }
+    _set(state.copyWith(peers: discovery.nearby));
+  }
+
+  /// Probes paired devices that are not currently visible and refreshes their
+  /// endpoint in the trust store. Runs on a timer and from the UI button.
+  Future<void> reconnectPaired() async {
+    _nextProbe.clear();
+    await _probePairedPeers(wait: true);
+    final online = state.trustedDevices
+        .where((device) => _peerFor(device)?.isLive == true)
+        .length;
+    _banner(
+      state.trustedDevices.isEmpty
+          ? 'Pair a device first — tap Show my QR code'
+          : online == 0
+          ? 'No paired device answered. Check Wi-Fi or open FlowDrop there.'
+          : '$online paired device${online == 1 ? '' : 's'} reachable',
+    );
+  }
+
+  Future<void> _probePairedPeers({bool wait = false}) async {
+    if (_identity == null || _disposed) return;
+    final devices = state.trustedDevices;
+    final pending = <Future<void>>[];
+    for (final device in devices) {
+      final peer = _peerFor(device);
+      if (peer != null && peer.isLive) continue;
+      final next = _nextProbe[device.deviceId];
+      if (next != null && next.isAfter(DateTime.now())) continue;
+      final probe = _probePairedDevice(device);
+      if (wait) {
+        pending.add(probe);
+      } else {
+        unawaited(probe);
+      }
+    }
+    if (wait) await Future.wait(pending);
+  }
+
+  Peer? _peerFor(TrustedDevice device) {
+    for (final peer in state.peers) {
+      if (peer.device.id == device.deviceId ||
+          fingerprintsEqual(peer.device.fingerprint, device.fingerprint)) {
+        return peer;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _probePairedDevice(TrustedDevice device) async {
+    if (_probing.contains(device.deviceId)) return;
+    final identity = _identity;
+    final local = _currentLocalDevice;
+    if (identity == null || local == null) return;
+    _probing.add(device.deviceId);
+    try {
+      for (final endpoint in _endpointsForDevice(device)) {
+        final client = FlowDropClient(
+          host: endpoint.host,
+          port: endpoint.port,
+          identity: identity,
+          localDevice: local,
+          expectedFingerprint: device.fingerprint,
+          connectionTimeout: const Duration(seconds: 4),
+        );
+        try {
+          final info = await client.info();
+          if (info.id != device.deviceId) continue;
+          await _rememberPaired(info);
+          _nextProbe.remove(device.deviceId);
+          return;
+        } on Object {
+          // Try the next remembered address / port.
+        } finally {
+          client.close();
+        }
+      }
+      _nextProbe[device.deviceId] = DateTime.now().add(
+        FlowDropProtocol.pairedRetryDelay,
+      );
+    } finally {
+      _probing.remove(device.deviceId);
+    }
+  }
+
+  /// Persists the endpoint a paired device just answered on, so the next cold
+  /// start can reconnect without discovery.
+  Future<void> _rememberPaired(DeviceInfo info) async {
+    final index = state.trustedDevices.indexWhere(
+      (device) =>
+          device.deviceId == info.id ||
+          fingerprintsEqual(device.fingerprint, info.fingerprint),
+    );
+    if (index < 0) return;
+    final current = state.trustedDevices[index];
+    final merged = current.mergeDevice(info);
+    final changed =
+        merged.port != current.port ||
+        merged.addresses.join(',') != current.addresses.join(',') ||
+        merged.name != current.name;
+    final staleWrite =
+        current.lastSeen == null ||
+        DateTime.now().difference(current.lastSeen!) >
+            const Duration(seconds: 60);
+    if (changed || staleWrite) {
+      await _trustStore?.trust(merged);
+      final next = [...state.trustedDevices];
+      next[index] = merged;
+      _set(state.copyWith(trustedDevices: next));
+    }
+    _discovery?.markPairedOnline(info);
+    _set(state.copyWith(peers: _discovery?.nearby ?? state.peers));
+    if (merged.port != current.port) {
+      // The remote app may have restarted on a different port; beacons will
+      // catch up, and the probe path already uses the fresh endpoint.
+      _banner('${info.name} is reachable on port ${merged.port}');
+    }
+  }
+
+  /// Every endpoint worth trying for a device: live addresses first, then
+  /// remembered ones, and the default port as a last resort.
+  List<({String host, int port})> _endpointsForDevice(TrustedDevice device) {
+    return _endpoints(device.addresses, device.port);
+  }
+
+  List<({String host, int port})> _endpoints(
+    Iterable<String> addresses,
+    int port,
+  ) {
+    final hosts = addresses
+        .map((address) => address.trim())
+        .where((address) => address.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    final ports = <int>{
+      if (port > 0) port,
+      FlowDropProtocol.defaultPort,
+    }.toList(growable: false);
+    return [
+      for (final host in hosts.take(6))
+        for (final candidate in ports) (host: host, port: candidate),
+    ];
+  }
+
+  List<({String host, int port})> _endpointsForPeer(DeviceInfo peer) {
+    final trusted = state.trustedDevices
+        .where(
+          (device) =>
+              device.deviceId == peer.id ||
+              fingerprintsEqual(device.fingerprint, peer.fingerprint),
+        )
+        .firstOrNull;
+    return _endpoints(
+      [...peer.addresses, ...?trusted?.addresses],
+      peer.port > 0
+          ? peer.port
+          : (trusted?.port ?? FlowDropProtocol.defaultPort),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // Incoming
   // ---------------------------------------------------------------------------
 
@@ -289,6 +474,11 @@ class AppController extends Notifier<AppState> {
     String remoteIp,
     bool trusted,
   ) async {
+    if (trusted) {
+      // A paired device just proved it is reachable; keep its endpoint fresh
+      // so the next cold start reconnects without discovery.
+      unawaited(_rememberPaired(offer.sender));
+    }
     if (trusted && state.settings.autoAcceptTrusted) {
       await _beginIncoming(offer, remoteIp, trusted);
       return true;
@@ -523,7 +713,10 @@ class AppController extends Notifier<AppState> {
   }) async {
     final identity = _identity;
     if (identity == null) return 'FlowDrop is still starting.';
-    if (peer.addresses.isEmpty) return 'No network address for ${peer.name}.';
+    final endpoints = _endpointsForPeer(peer);
+    if (endpoints.isEmpty) {
+      return 'No network address for ${peer.name}. Tap reconnect to try again.';
+    }
     final trimmed = text?.trim();
     if (files.isEmpty && (trimmed == null || trimmed.isEmpty)) {
       return 'Pick at least one file or type a message.';
@@ -555,14 +748,6 @@ class AppController extends Notifier<AppState> {
       text: trimmed == null || trimmed.isEmpty ? null : trimmed,
     );
 
-    final client = FlowDropClient(
-      host: peer.addresses.first,
-      port: peer.port,
-      identity: identity,
-      localDevice: local,
-      expectedFingerprint: peer.fingerprint,
-    );
-    _outgoingClients[sessionId] = client;
     _upsertSession(
       SessionProgress(
         sessionId: sessionId,
@@ -589,14 +774,48 @@ class AppController extends Notifier<AppState> {
       ),
     );
 
+    FlowDropClient? client;
+    Object? lastError;
     try {
-      final remote = await client.info();
-      if (remote.id != peer.id) {
-        throw FlowDropException(
-          'device_changed',
-          '${peer.name} presented a different identity. Reconnect to continue.',
+      // The same device can answer on several addresses (Wi-Fi roam, hotspot,
+      // stale DHCP lease). Try them all instead of failing on the first one.
+      for (final endpoint in endpoints) {
+        final candidate = FlowDropClient(
+          host: endpoint.host,
+          port: endpoint.port,
+          identity: identity,
+          localDevice: local,
+          expectedFingerprint: peer.fingerprint,
         );
+        try {
+          final info = await candidate.info();
+          if (info.id != peer.id) {
+            throw FlowDropException(
+              'device_changed',
+              '${peer.name} presented a different identity. Reconnect to continue.',
+            );
+          }
+          client = candidate;
+          unawaited(_rememberPaired(info));
+          break;
+        } on FlowDropException catch (error) {
+          candidate.close();
+          lastError = error;
+          if (error.code == 'device_changed') rethrow;
+        } on Object catch (error) {
+          candidate.close();
+          lastError = error;
+        }
       }
+      if (client == null) {
+        _markSession(sessionId, TransferState.failed);
+        await _updateRecordState(sessionId, TransferState.failed);
+        _nextProbe.remove(peer.id);
+        return 'Could not reach ${peer.name}. It may have moved to another '
+            'network — tap Reconnect paired devices and try again.';
+      }
+      _outgoingClients[sessionId] = client;
+
       final response = await client.offer(offer);
       if (!response.accepted) {
         _markSession(sessionId, TransferState.declined);
@@ -631,10 +850,10 @@ class AppController extends Notifier<AppState> {
       }
       _markSession(sessionId, TransferState.failed);
       await _updateRecordState(sessionId, TransferState.failed);
-      return 'Transfer failed: $error';
+      return 'Transfer failed: $error${lastError == null ? '' : ' ($lastError)'}';
     } finally {
       _outgoingClients.remove(sessionId);
-      client.close();
+      client?.close();
     }
   }
 
@@ -721,27 +940,34 @@ class AppController extends Notifier<AppState> {
   Future<String?> sendClipboardTo(DeviceInfo peer, String text) async {
     final identity = _identity;
     final local = _currentLocalDevice;
-    if (identity == null || local == null || peer.addresses.isEmpty) {
+    final endpoints = _endpointsForPeer(peer);
+    if (identity == null || local == null || endpoints.isEmpty) {
       return 'FlowDrop is not ready.';
     }
-    final client = FlowDropClient(
-      host: peer.addresses.first,
-      port: peer.port,
-      identity: identity,
-      localDevice: local,
-      expectedFingerprint: peer.fingerprint,
-    );
-    try {
-      await client.info();
-      await client.sendClipboard(text);
-      return null;
-    } on FlowDropException catch (error) {
-      return error.message;
-    } on Object catch (error) {
-      return 'Clipboard failed: $error';
-    } finally {
-      client.close();
+    Object? lastError;
+    for (final endpoint in endpoints) {
+      final client = FlowDropClient(
+        host: endpoint.host,
+        port: endpoint.port,
+        identity: identity,
+        localDevice: local,
+        expectedFingerprint: peer.fingerprint,
+        connectionTimeout: const Duration(seconds: 5),
+      );
+      try {
+        final info = await client.info();
+        await client.sendClipboard(text);
+        unawaited(_rememberPaired(info));
+        return null;
+      } on FlowDropException catch (error) {
+        lastError = error;
+      } on Object catch (error) {
+        lastError = error;
+      } finally {
+        client.close();
+      }
     }
+    return 'Clipboard failed: $lastError';
   }
 
   Future<void> cancelSession(String sessionId) async {
@@ -760,6 +986,7 @@ class AppController extends Notifier<AppState> {
   }
 
   void dismissSession(String sessionId) {
+    _speedSamples.removeWhere((key, _) => key.startsWith('$sessionId/'));
     _set(
       state.copyWith(
         sessions: state.sessions
@@ -811,23 +1038,6 @@ class AppController extends Notifier<AppState> {
             _handleClipboard(from, data);
           }
         }
-      case 'text':
-        {
-          final payload = event.data['payload'];
-          if (payload is Map<String, dynamic>) {
-            try {
-              unawaited(
-                _handleIncomingText(
-                  TextPayload.fromJson(payload),
-                  'unknown',
-                  true,
-                ),
-              );
-            } on Object {
-              // Ignore malformed third-party events.
-            }
-          }
-        }
       default:
         break;
     }
@@ -840,17 +1050,39 @@ class AppController extends Notifier<AppState> {
     if (sessionId is! String || fileId is! String || received == null) return;
     final session = _findSession(sessionId);
     if (session == null) return;
+    final speed = _speedFor('$sessionId/$fileId', received);
     final files = session.files
         .map(
           (file) => file.fileId == fileId
               ? file.copyWith(
                   transferredBytes: received,
+                  bytesPerSecond: speed,
                   state: TransferState.active,
                 )
               : file,
         )
         .toList(growable: false);
     _upsertSession(session.copyWith(files: files, state: TransferState.active));
+  }
+
+  /// Smooths a byte counter into bytes/second without storing per-file state
+  /// beyond the last sample.
+  double? _speedFor(String key, int bytes) {
+    final now = DateTime.now();
+    final last = _speedSamples[key];
+    if (last == null) {
+      _speedSamples[key] = (bytes: bytes, at: now);
+      return null;
+    }
+    final elapsed = now.difference(last.at).inMilliseconds;
+    if (elapsed < 300) return null;
+    final delta = bytes - last.bytes;
+    if (delta < 0) {
+      _speedSamples[key] = (bytes: bytes, at: now);
+      return null;
+    }
+    _speedSamples[key] = (bytes: bytes, at: now);
+    return delta * 1000 / elapsed;
   }
 
   int? _asInt(Object? value) {
@@ -915,6 +1147,7 @@ class AppController extends Notifier<AppState> {
     try {
       final info = await client.info();
       _discovery?.addManual(info);
+      unawaited(_rememberPaired(info));
       _set(state.copyWith(peers: _discovery?.nearby ?? state.peers));
       return info;
     } finally {
@@ -983,7 +1216,8 @@ class AppController extends Notifier<AppState> {
       client.close();
     }
 
-    await _trustStore!.trust(TrustedDevice.fromDevice(remote));
+    final trustedDevice = TrustedDevice.fromDevice(remote);
+    await _trustStore!.trust(trustedDevice);
     final trusted = await _trustStore!.all();
     _discovery?.addFromQr(remote);
     _set(
@@ -993,13 +1227,26 @@ class AppController extends Notifier<AppState> {
       ),
     );
     _banner('Paired with ${remote.name}');
+    unawaited(_rememberPaired(remote));
     return remote;
   }
 
   Future<void> forgetDevice(String fingerprint) async {
+    final match = state.trustedDevices
+        .where((device) => fingerprintsEqual(device.fingerprint, fingerprint))
+        .firstOrNull;
     await _trustStore?.forget(fingerprint);
+    if (match != null) {
+      _discovery?.removePaired(match.deviceId);
+      _nextProbe.remove(match.deviceId);
+    }
     final trusted = await _trustStore?.all() ?? const [];
-    _set(state.copyWith(trustedDevices: trusted));
+    _set(
+      state.copyWith(
+        trustedDevices: trusted,
+        peers: _discovery?.nearby ?? state.peers,
+      ),
+    );
     _banner('Device removed');
   }
 
@@ -1407,11 +1654,13 @@ class AppController extends Notifier<AppState> {
   ) {
     final session = _findSession(sessionId);
     if (session == null) return;
+    final speed = _speedFor('$sessionId/$fileId', transferred);
     final files = session.files
         .map(
           (file) => file.fileId == fileId
               ? file.copyWith(
                   transferredBytes: transferred,
+                  bytesPerSecond: speed,
                   state: TransferState.active,
                 )
               : file,
@@ -1432,6 +1681,8 @@ class AppController extends Notifier<AppState> {
   Future<void> _dispose() async {
     _disposed = true;
     _addressTimer?.cancel();
+    _presenceTimer?.cancel();
+    _speedSamples.clear();
     _stopClipboardSync();
     await _peerSubscription?.cancel();
     for (final completer in _pendingOffers.values) {

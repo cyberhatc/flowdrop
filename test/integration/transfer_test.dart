@@ -8,6 +8,7 @@ import 'package:flowdrop/core/protocol/offers.dart';
 import 'package:flowdrop/core/security/identity.dart';
 import 'package:flowdrop/core/security/pairing.dart';
 import 'package:flowdrop/core/security/trust_store.dart';
+import 'package:flowdrop/core/transfer/checksum.dart';
 import 'package:flowdrop/core/transport/client.dart';
 import 'package:flowdrop/core/transport/server.dart';
 
@@ -337,6 +338,61 @@ void main() {
       await File('${downloads.path}/${result.savedPath!}').readAsBytes(),
       bytes,
     );
+  });
+
+  test('a 128 MiB file streams end to end with a verified checksum', () async {
+    const blockSize = 1 << 20;
+    const blocks = 128;
+    const total = blockSize * blocks;
+    final source = File('${tempRoot.path}/large.bin');
+    final handle = source.openSync(mode: FileMode.write);
+    final hasher = IncrementalSha256();
+    final block = List<int>.generate(blockSize, (index) => index & 0xff);
+    try {
+      for (var i = 0; i < blocks; i++) {
+        handle.writeFromSync(block);
+        hasher.add(block);
+      }
+    } finally {
+      handle.closeSync();
+    }
+
+    final offered = OfferedFile(
+      id: FlowDropClient.newSessionId(),
+      name: 'large.bin',
+      size: total,
+      mime: 'application/octet-stream',
+    );
+    final sessionId = FlowDropClient.newSessionId();
+    final offer = OfferRequest(
+      sessionId: sessionId,
+      sender: sender.toDeviceInfo(addresses: const ['127.0.0.1'], port: 0),
+      files: [offered],
+    );
+
+    final c = client();
+    addTearDown(c.close);
+    final response = await c.offer(offer);
+    expect(response.accepted, isTrue);
+
+    var maxReported = 0;
+    final result = await c.uploadFile(
+      file: offered,
+      localPath: source.path,
+      uploadPath: response.uploadUrls[offered.id]!,
+      onProgress: (sent, _) {
+        if (sent > maxReported) maxReported = sent;
+      },
+    );
+
+    expect(result.size, total);
+    expect(result.sha256, hasher.close());
+    expect(maxReported, total);
+    final saved = File('${downloads.path}/${result.savedPath!}');
+    expect(await saved.length(), total);
+    // Re-hash what actually landed on disk: proves the receiver streamed to
+    // the file instead of buffering it in memory.
+    expect(await sha256File(saved), result.sha256);
   });
 
   test('cancelled sessions reject further uploads', () async {

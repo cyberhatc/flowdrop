@@ -434,6 +434,7 @@ class SettingsScreen extends ConsumerWidget {
                 _TrustedDeviceRow(
                   device: device,
                   onForget: () => controller.forgetDevice(device.fingerprint),
+                  onReconnect: controller.reconnectPaired,
                 ),
           ],
         ),
@@ -672,14 +673,25 @@ class _AccentSwatch extends StatelessWidget {
 }
 
 class _TrustedDeviceRow extends StatelessWidget {
-  const _TrustedDeviceRow({required this.device, required this.onForget});
+  const _TrustedDeviceRow({
+    required this.device,
+    required this.onForget,
+    required this.onReconnect,
+  });
 
   final TrustedDevice device;
   final VoidCallback onForget;
+  final VoidCallback onReconnect;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final endpoint = device.addresses.isEmpty
+        ? 'No known address'
+        : '${device.addresses.first}:${device.port}';
+    final seen = device.lastSeen == null
+        ? 'not contacted yet'
+        : 'last seen ${_relative(device.lastSeen!)}';
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -705,7 +717,7 @@ class _TrustedDeviceRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${device.platform} · ${fingerprintPhrase(device.fingerprint)}',
+                  '$endpoint · ${fingerprintPhrase(device.fingerprint)}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -713,8 +725,21 @@ class _TrustedDeviceRow extends StatelessWidget {
                     color: scheme.onSurface.withValues(alpha: 0.55),
                   ),
                 ),
+                const SizedBox(height: 1),
+                Text(
+                  seen,
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    color: scheme.onSurface.withValues(alpha: 0.4),
+                  ),
+                ),
               ],
             ),
+          ),
+          IconButton(
+            tooltip: 'Reconnect paired devices',
+            onPressed: onReconnect,
+            icon: const Icon(Icons.sync_rounded, size: 18),
           ),
           IconButton(
             tooltip: 'Forget device',
@@ -724,6 +749,14 @@ class _TrustedDeviceRow extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _relative(DateTime at) {
+    final diff = DateTime.now().difference(at);
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inHours < 1) return '${diff.inMinutes} min ago';
+    if (diff.inDays < 1) return '${diff.inHours} h ago';
+    return '${diff.inDays} d ago';
   }
 
   Future<void> _confirmForget(BuildContext context) async {
