@@ -52,7 +52,7 @@ flutter test           # full unit + integration suite
 | Method | How | Notes |
 |---|---|---|
 | Same Wi-Fi / hotspot | UDP beacon + mDNS discovery (radar view) | No internet needed; hotspot = same code path |
-| QR code | FlowDrop → **Show my QR** → scan/paste on the other device | Works even when discovery is blocked |
+| QR code | FlowDrop → **Show my QR** → scan/paste on the other device | Works even when discovery is blocked; after one scan **both** devices can send |
 | Manual | IP : port + short fingerprint | Fallback for locked-down networks |
 
 Large data always moves over the LAN. Bluetooth is not used for file transfer; see `docs/ARCHITECTURE.md` for why.
@@ -74,6 +74,9 @@ one-off connection:
   that moved from Wi-Fi to hotspot keeps working without re-pairing.
 - Hidden / discovery-off mode still keeps a passive registry, so paired
   devices remain reachable by address even when this device is invisible.
+- QR pairing is two-way: as soon as one device scans the other's code, the
+  device that showed the code refreshes its trust list and radar too, so both
+  sides can send without a restart.
 
 If a paired device is on a different network, tap **Reconnect paired devices**
 on the home screen (or the sync button next to it in Settings) once both are
