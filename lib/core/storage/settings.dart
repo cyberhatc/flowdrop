@@ -35,6 +35,7 @@ class AppSettings {
     this.receiveDirectory = '',
     this.onboardingDone = false,
     this.visibility = VisibilityMode.everyone,
+    this.relayUrl = '',
   });
 
   /// Empty means "use the platform default downloads folder".
@@ -58,6 +59,10 @@ class AppSettings {
   /// Who may discover/ask this device. Default: everyone.
   final VisibilityMode visibility;
 
+  /// Optional self-hosted relay URL for transfers across different networks.
+  /// Empty disables relay tunneling.
+  final String relayUrl;
+
   AppSettings copyWith({
     String? deviceName,
     AppThemeMode? themeMode,
@@ -69,6 +74,7 @@ class AppSettings {
     String? receiveDirectory,
     bool? onboardingDone,
     VisibilityMode? visibility,
+    String? relayUrl,
   }) {
     return AppSettings(
       deviceName: deviceName ?? this.deviceName,
@@ -81,6 +87,7 @@ class AppSettings {
       receiveDirectory: receiveDirectory ?? this.receiveDirectory,
       onboardingDone: onboardingDone ?? this.onboardingDone,
       visibility: visibility ?? this.visibility,
+      relayUrl: relayUrl ?? this.relayUrl,
     );
   }
 
@@ -95,6 +102,7 @@ class AppSettings {
     'receiveDirectory': receiveDirectory,
     'onboardingDone': onboardingDone,
     'visibility': visibility.name,
+    'relayUrl': relayUrl,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -118,6 +126,7 @@ class AppSettings {
         (value) => value.name == json['visibility'],
         orElse: () => VisibilityMode.everyone,
       ),
+      relayUrl: json['relayUrl'] as String? ?? '',
     );
   }
 

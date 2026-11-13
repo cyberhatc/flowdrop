@@ -40,12 +40,15 @@ subprotocol `flowdrop-relay-<CODE>`; the relay bridges them. Because the
 forwarded bytes are the existing FlowDrop HTTPS stream, TLS and certificate
 pinning stay end-to-end — the relay never sees plaintext.
 
-**Status:** the relay server is provided as a building block. Wiring the
-FlowDrop client to tunnel its HTTPS traffic through it (instead of opening a
-direct socket) is the next step and is not yet implemented in the app. If
-you need this, run the relay on a host both devices can reach (a cheap VPS,
-a friend's machine, or your own) and open an issue/PR to finish the client
-side.
+**Status:** client tunneling is now wired in. Set the same relay URL on both
+devices (Settings → Remote transfer). The receiving device keeps a background
+connection to the relay under its own device id; the sending device opens a
+local proxy to the relay under the receiver's device id, so the normal HTTPS
+exchange (and certificate pinning) runs end to end through the relay. Verified
+by a smoke test that pushes bytes through the relay. Limitations: the
+receiver's agent only runs while the app is in the foreground (mobile
+background execution is not implemented); and the relay URL must be reachable
+by both devices.
 
 ## What will NOT work
 

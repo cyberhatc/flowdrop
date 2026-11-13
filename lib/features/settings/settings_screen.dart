@@ -249,6 +249,34 @@ class SettingsScreen extends ConsumerWidget {
         ),
         const SizedBox(height: 18),
         _SettingsSection(
+          title: 'Remote transfer (relay)',
+          children: [
+            Text(
+              'Optional self-hosted relay URL for devices on different '
+              'networks (e.g. http://relay.example.com:8080). Leave empty for '
+              'LAN-only. See docs/REMOTE_TRANSFER.md.',
+              style: TextStyle(
+                fontSize: 11.5,
+                height: 1.4,
+                color: scheme.onSurface.withValues(alpha: 0.55),
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: TextEditingController(text: settings.relayUrl),
+              decoration: const InputDecoration(
+                labelText: 'Relay URL',
+                hintText: 'http://host:8080',
+                border: OutlineInputBorder(),
+              ),
+              onSubmitted: (value) => controller.applySettings(
+                settings.copyWith(relayUrl: value.trim()),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _SettingsSection(
           title: 'Clipboard',
           children: [
             SwitchListTile.adaptive(

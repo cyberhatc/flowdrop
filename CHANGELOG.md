@@ -65,8 +65,10 @@ the same network — no account, no internet, no cloud.
 - The trust store is written atomically with a backup, so a crash mid-write no
   longer loses pairings.
 - Added a self-hostable relay (`tool/relay_server.dart`) and
-  `docs/REMOTE_TRANSFER.md` as the building blocks for transfers across
-  different networks (client tunneling is the next step).
+  `docs/REMOTE_TRANSFER.md`. Client tunneling is now wired in via
+  `lib/core/transport/relay_bridge.dart`: set the same relay URL on both
+  devices (Settings -> Remote transfer) and transfers run end to end through
+  the relay, with certificate pinning preserved.
 
 ### Added
 

@@ -12,17 +12,13 @@
 //   PORT=9000 dart run tool/relay_server.dart  # custom port
 //
 // Protocol:
-//   Both devices connect to  ws://host:port/tunnel
-//   with the subprotocol  flowdrop-relay-<CODE>
-//   (e.g. flowdrop-relay-a1b2c3). The first connection for a code becomes
-//   the host, the second becomes the guest; they are then bridged. Codes are
-//   single-use.
-//
-// NOTE: client-side tunneling through this relay is not wired into the app
-// yet. For now this is a building block + documentation; see
-// docs/REMOTE_TRANSFER.md.
+//   1. Both devices open a WebSocket to  ws://host:port/tunnel
+//   2. Each sends its first text frame: the shared code (e.g. a device id).
+//   3. The relay pairs the two sockets by code and forwards every subsequent
+//      frame in both directions. Codes are single-use.
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:shelf/shelf.dart';
@@ -31,79 +27,123 @@ import 'package:shelf_router/shelf_router.dart';
 import 'package:shelf_web_socket/shelf_web_socket.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+class _Peer {
+  final WebSocketChannel channel;
+  final List<dynamic> buffer = [];
+  bool ready = false;
+  String? code;
+  _Peer(this.channel);
+}
+
 class _Pair {
-  WebSocketChannel? first;
-  WebSocketChannel? second;
+  _Peer? a;
+  _Peer? b;
+  bool active = false;
 }
 
 void main() async {
   final port = int.tryParse(Platform.environment['PORT'] ?? '') ?? 8080;
   final pairs = <String, _Pair>{};
 
+  void activate(_Pair pair) {
+    if (pair.active) return;
+    if (pair.a == null || pair.b == null) return;
+    if (!pair.a!.ready || !pair.b!.ready) return;
+    pair.active = true;
+    final a = pair.a!;
+    final b = pair.b!;
+    for (final data in a.buffer) {
+      try {
+        b.channel.sink.add(data);
+      } catch (_) {}
+    }
+    a.buffer.clear();
+    for (final data in b.buffer) {
+      try {
+        a.channel.sink.add(data);
+      } catch (_) {}
+    }
+    b.buffer.clear();
+  }
+
   final router = Router()
     ..get('/health', (Request req) => Response.ok('ok\n'))
     ..get(
       '/tunnel',
       webSocketHandler((WebSocketChannel channel, String? protocol) {
-        final code = _codeFromProtocol(protocol);
-        if (code == null) {
-          channel.sink.close(4000, 'missing flowdrop-relay-<code> subprotocol');
-          return;
-        }
+        _Peer? self;
+        String? selfCode;
 
-        final pair = pairs.putIfAbsent(code, () => _Pair());
+        channel.stream.listen(
+          (data) {
+            // First frame carries the code.
+            if (self == null) {
+              String code;
+              if (data is String) {
+                code = data.trim();
+              } else if (data is List<int>) {
+                code = utf8.decode(data).trim();
+              } else {
+                code = data.toString().trim();
+              }
+              if (code.isEmpty) {
+                channel.sink.close(4000, 'empty code');
+                return;
+              }
+              selfCode = code;
+              final pair = pairs.putIfAbsent(code, () => _Pair());
+              if (pair.a == null) {
+                self = _Peer(channel)..code = code;
+                pair.a = self;
+              } else if (pair.b == null) {
+                self = _Peer(channel)..code = code;
+                pair.b = self;
+              } else {
+                channel.sink.close(4001, 'code already in use');
+                return;
+              }
+              self!.ready = true;
+              activate(pair);
+              return;
+            }
 
-        if (pair.first == null) {
-          pair.first = channel;
-        } else if (pair.second == null) {
-          pair.second = channel;
-          pairs.remove(code);
-          _bridge(pair.first!, pair.second!);
-        } else {
-          channel.sink.close(4001, 'code already in use');
-          return;
-        }
-
-        Timer(const Duration(minutes: 2), () {
-          if (pairs.containsKey(code)) {
-            final p = pairs.remove(code);
-            p?.first?.sink.close(4002, 'timeout waiting for peer');
-            p?.second?.sink.close(4002, 'timeout waiting for peer');
-          }
-        });
+            // Subsequent frames.
+            if (self == null || selfCode == null) return;
+            final pair = pairs[selfCode];
+            if (pair == null) {
+              // Already bridged and consumed: forward directly.
+              return;
+            }
+            if (!pair.active) {
+              final s = self!;
+              s.buffer.add(data);
+              activate(pair);
+              return;
+            }
+            final other = (pair.a == self) ? pair.b : pair.a;
+            if (other != null) {
+              try {
+                other.channel.sink.add(data);
+              } catch (_) {}
+            }
+          },
+          onDone: () {
+            if (selfCode != null) {
+              final pair = pairs[selfCode];
+              if (pair != null) {
+                if (pair.a == self) pair.a = null;
+                if (pair.b == self) pair.b = null;
+                if (pair.a == null && pair.b == null) pairs.remove(selfCode);
+              }
+            }
+          },
+          onError: (_) {},
+          cancelOnError: false,
+        );
       }),
     );
 
-  final server = await shelf_io.serve(
-    router.call,
-    InternetAddress.anyIPv4,
-    port,
-  );
+  final server = await shelf_io.serve(router.call, InternetAddress.anyIPv4, port);
   // ignore: avoid_print
   print('FlowDrop relay listening on ${server.address.address}:${server.port}');
-}
-
-String? _codeFromProtocol(String? protocol) {
-  if (protocol == null) return null;
-  if (protocol.startsWith('flowdrop-relay-')) {
-    final code = protocol.substring('flowdrop-relay-'.length);
-    return code.isEmpty ? null : code;
-  }
-  if (protocol.startsWith('flowdrop-relay')) return null;
-  return protocol.isEmpty ? null : protocol;
-}
-
-void _bridge(WebSocketChannel a, WebSocketChannel b) {
-  a.stream.listen(
-    (data) => b.sink.add(data),
-    onDone: () => b.sink.close(),
-    onError: (_) => b.sink.close(),
-    cancelOnError: true,
-  );
-  b.stream.listen(
-    (data) => a.sink.add(data),
-    onDone: () => a.sink.close(),
-    onError: (_) => a.sink.close(),
-    cancelOnError: true,
-  );
 }

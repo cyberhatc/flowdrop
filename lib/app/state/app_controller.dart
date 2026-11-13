@@ -26,6 +26,7 @@ import '../../core/storage/history_store.dart';
 import '../../core/storage/settings.dart';
 import '../../core/transfer/transfer_models.dart';
 import '../../core/transport/client.dart';
+import '../../core/transport/relay_bridge.dart';
 import '../../core/transport/server.dart';
 import '../storage/json_trust_store.dart';
 import '../storage/prefs_settings_store.dart';
@@ -62,6 +63,11 @@ class AppController extends Notifier<AppState> {
   final Set<String> _probing = {};
   final Map<String, DateTime> _nextProbe = {};
   final Map<String, ({int bytes, DateTime at})> _speedSamples = {};
+
+  // Relay tunneling (cross-network transfers).
+  bool _stopRelayReceiver = false;
+  final Map<String, ServerSocket> _senderProxies = {};
+  final Map<String, int> _senderProxyPorts = {};
 
   // Clipboard sync (opt-in). The watcher polls the OS clipboard; the guard
   // remembers remote payloads so received values are never re-pushed.
@@ -199,6 +205,7 @@ class AppController extends Notifier<AppState> {
         state.settings.visibility == VisibilityMode.trustedOnly;
     await server.start();
     _server = server;
+    unawaited(_startRelayReceiver());
     _set(
       state.copyWith(
         serverRunning: true,
@@ -300,6 +307,42 @@ class AppController extends Notifier<AppState> {
   /// Puts every paired device on the radar, even if it is not beaconing right
   /// now. This is what stops a paired phone from vanishing after an app
   /// restart and makes "send to my laptop" a one-tap action later.
+  Future<void> _startRelayReceiver() async {
+    final url = state.settings.relayUrl.trim();
+    final identity = _identity;
+    final server = _server;
+    if (url.isEmpty || identity == null || server == null) return;
+    _stopRelayReceiver = false;
+    final bridge = RelayBridge(relayUrl: url, code: identity.id);
+    unawaited(
+      bridge.startReceiver(
+        targetHost: '127.0.0.1',
+        targetPort: server.port,
+        isStopped: () => _stopRelayReceiver,
+      ),
+    );
+  }
+
+  void _stopRelayReceiverNow() {
+    _stopRelayReceiver = true;
+  }
+
+  Future<int?> relayProxyPort(String code) async {
+    final url = state.settings.relayUrl.trim();
+    if (url.isEmpty) return null;
+    final existing = _senderProxyPorts[code];
+    if (existing != null) return existing;
+    try {
+      final bridge = RelayBridge(relayUrl: url, code: code);
+      final server = await bridge.startSenderProxy(localPort: 0);
+      _senderProxies[code] = server;
+      _senderProxyPorts[code] = server.port;
+      return server.port;
+    } catch (_) {
+      return null;
+    }
+  }
+
   void _seedPairedPeers(List<TrustedDevice> devices) {
     final discovery = _discovery;
     if (discovery == null) return;
@@ -714,7 +757,13 @@ class AppController extends Notifier<AppState> {
   }) async {
     final identity = _identity;
     if (identity == null) return 'FlowDrop is still starting.';
-    final endpoints = _endpointsForPeer(peer);
+    final endpoints = <({String host, int port})>[..._endpointsForPeer(peer)];
+    if (state.settings.relayUrl.trim().isNotEmpty) {
+      final proxyPort = await relayProxyPort(peer.id);
+      if (proxyPort != null) {
+        endpoints.insert(0, (host: '127.0.0.1', port: proxyPort));
+      }
+    }
     if (endpoints.isEmpty) {
       return 'No network address for ${peer.name}. Tap reconnect to try again.';
     }
@@ -941,7 +990,13 @@ class AppController extends Notifier<AppState> {
   Future<String?> sendClipboardTo(DeviceInfo peer, String text) async {
     final identity = _identity;
     final local = _currentLocalDevice;
-    final endpoints = _endpointsForPeer(peer);
+    var endpoints = <({String host, int port})>[..._endpointsForPeer(peer)];
+    if (state.settings.relayUrl.trim().isNotEmpty) {
+      final proxyPort = await relayProxyPort(peer.id);
+      if (proxyPort != null) {
+        endpoints.insert(0, (host: '127.0.0.1', port: proxyPort));
+      }
+    }
     if (identity == null || local == null || endpoints.isEmpty) {
       return 'FlowDrop is not ready.';
     }
@@ -1165,10 +1220,20 @@ class AppController extends Notifier<AppState> {
 
     DeviceInfo? remote;
     Object? lastError;
-    for (final address in payload.addresses) {
+    final candidateEndpoints = <({String host, int port})>[
+      for (final address in payload.addresses)
+        (host: address, port: payload.port),
+    ];
+    if (state.settings.relayUrl.trim().isNotEmpty) {
+      final proxyPort = await relayProxyPort(payload.deviceId);
+      if (proxyPort != null) {
+        candidateEndpoints.insert(0, (host: '127.0.0.1', port: proxyPort));
+      }
+    }
+    for (final endpoint in candidateEndpoints) {
       final probe = FlowDropClient(
-        host: address,
-        port: payload.port,
+        host: endpoint.host,
+        port: endpoint.port,
         identity: identity,
         localDevice: local,
         expectedFingerprint: payload.fingerprint,
@@ -1327,6 +1392,13 @@ class AppController extends Notifier<AppState> {
       } else {
         _stopClipboardSync();
       }
+    }
+
+    if (next.relayUrl.trim() != previous.relayUrl.trim()) {
+      _stopRelayReceiverNow();
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      _stopRelayReceiver = false;
+      unawaited(_startRelayReceiver());
     }
   }
 
