@@ -255,7 +255,9 @@ class _FingerprintChip extends StatelessWidget {
               Icon(Icons.fingerprint_rounded, size: 14, color: scheme.primary),
               const SizedBox(width: 6),
               Text(
-                fingerprint,
+                fingerprint.length > 16
+                    ? '${fingerprint.substring(0, 16)}…'
+                    : fingerprint,
                 style: TextStyle(
                   fontSize: 11,
                   fontFamily: 'monospace',

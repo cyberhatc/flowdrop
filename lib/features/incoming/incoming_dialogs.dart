@@ -331,6 +331,8 @@ class IncomingTextDialog extends ConsumerWidget {
           ),
         ),
       ),
+      actionsOverflowDirection: VerticalDirection.down,
+      actionsOverflowButtonSpacing: 4,
       actions: [
         if (isLink(entry.text))
           TextButton.icon(
@@ -342,8 +344,9 @@ class IncomingTextDialog extends ConsumerWidget {
           onPressed: () async {
             await Clipboard.setData(ClipboardData(text: entry.text));
             if (context.mounted) {
-              ScaffoldMessenger.of(context)
-                  .showSnackBar(const SnackBar(content: Text('Text copied')));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Text copied')),
+              );
             }
           },
           icon: const Icon(Icons.copy_rounded, size: 16),
@@ -356,9 +359,9 @@ class IncomingTextDialog extends ConsumerWidget {
               entry.senderName,
             );
             if (context.mounted) {
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(SnackBar(content: Text(saved ?? 'Saved as .txt')));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(saved ?? 'Saved as .txt')),
+              );
             }
           },
           icon: const Icon(Icons.save_rounded, size: 16),

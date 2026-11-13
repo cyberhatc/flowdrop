@@ -17,7 +17,6 @@
 //   3. The relay pairs the two sockets by code and forwards every subsequent
 //      frame in both directions. Codes are single-use.
 
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
