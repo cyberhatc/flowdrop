@@ -47,6 +47,7 @@ class FlowDropServer {
     this.onText,
     this.onClipboard,
     this.onEvent,
+    this.onPaired,
     this.maxFileSize = FlowDropProtocol.maxFileSize,
   });
 
@@ -75,6 +76,11 @@ class FlowDropServer {
   onText;
   final void Function(String fromFingerprint, String data)? onClipboard;
   final void Function(ServerEvent event)? onEvent;
+
+  /// Called after a remote device successfully redeems a pairing token. The
+  /// app uses it to refresh its in-memory trust list and put the new device on
+  /// the radar immediately, so this side can send back without a restart.
+  final Future<void> Function(DeviceInfo device)? onPaired;
   final int maxFileSize;
 
   HttpServer? _server;
@@ -206,6 +212,13 @@ class FlowDropServer {
     await trustStore.trust(
       TrustedDevice.fromDevice(pair.device, autoAccept: pair.alwaysTrust),
     );
+    // Let the app refresh its trust list and radar. Best effort: a UI update
+    // must never turn a successful pairing into an error response.
+    try {
+      await onPaired?.call(pair.device);
+    } on Object {
+      // Ignore.
+    }
     return _json(
       PairResponse(ok: true, trusted: true, device: localDevice).toJson(),
     );

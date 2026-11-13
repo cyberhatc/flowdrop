@@ -193,6 +193,7 @@ class AppController extends Notifier<AppState> {
       onText: _handleIncomingText,
       onClipboard: _handleClipboard,
       onEvent: _handleServerEvent,
+      onPaired: _onPeerPaired,
     );
     server.autoDeclineUntrusted =
         state.settings.visibility == VisibilityMode.trustedOnly;
@@ -1229,6 +1230,23 @@ class AppController extends Notifier<AppState> {
     _banner('Paired with ${remote.name}');
     unawaited(_rememberPaired(remote));
     return remote;
+  }
+
+  /// The remote device scanned our QR code and paired with us. The server has
+  /// already written it to the trust store; mirror that in memory and put it on
+  /// the radar so this side can send files back immediately, without waiting
+  /// for a restart or a new discovery packet.
+  Future<void> _onPeerPaired(DeviceInfo device) async {
+    final trusted = await _trustStore?.all() ?? const <TrustedDevice>[];
+    _discovery?.addFromQr(device);
+    _seedPairedPeers(trusted);
+    _set(
+      state.copyWith(
+        trustedDevices: trusted,
+        peers: _discovery?.nearby ?? state.peers,
+      ),
+    );
+    _banner('${device.name} paired with you');
   }
 
   Future<void> forgetDevice(String fingerprint) async {

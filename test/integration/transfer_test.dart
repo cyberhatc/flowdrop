@@ -417,4 +417,133 @@ void main() {
       throwsA(isA<FlowDropException>()),
     );
   });
+
+  group('QR pairing makes both directions transferable', () {
+    late Directory downloadsA;
+    late InMemoryTrustStore trustA;
+    late FlowDropServer serverA;
+
+    setUpAll(() async {
+      downloadsA = Directory('${tempRoot.path}/downloadsA');
+      await downloadsA.create(recursive: true);
+      trustA = InMemoryTrustStore();
+      serverA = FlowDropServer(
+        identity: sender,
+        downloadDirectory: downloadsA.path,
+        onOffer: (_, _, _) async => true,
+        trustStore: trustA,
+        tokenManager: PairingTokenManager(),
+        deviceInfoBuilder: (port) =>
+            sender.toDeviceInfo(addresses: const ['127.0.0.1'], port: port),
+      );
+      await serverA.start(preferredPort: 0);
+    });
+
+    tearDownAll(() async {
+      await serverA.stop();
+    });
+
+    test('A scans B\'s code, then A -> B and B -> A both upload', () async {
+      // B shows a QR code; the payload carries B's endpoint and a one-time
+      // token. A scans it (the UI calls connectWithQr with the same payload).
+      final token = tokens.issue();
+      final payload = QrPayload.fromDevice(
+        device: receiver.toDeviceInfo(
+          addresses: const ['127.0.0.1'],
+          port: server.port,
+        ),
+        token: token,
+      );
+
+      final scanner = FlowDropClient(
+        host: '127.0.0.1',
+        port: server.port,
+        identity: sender,
+        localDevice: sender.toDeviceInfo(
+          addresses: const ['127.0.0.1'],
+          port: serverA.port,
+        ),
+        expectedFingerprint: receiver.fingerprint,
+      );
+      addTearDown(scanner.close);
+      final paired = await scanner.pair(payload: payload);
+      expect(paired.ok, isTrue);
+      expect(paired.trusted, isTrue);
+
+      // B trusted A as part of redeeming the token; A trusts B afterwards,
+      // exactly like connectWithQr does.
+      expect(await trust.isTrusted(sender.fingerprint), isTrue);
+      await trustA.trust(
+        TrustedDevice.fromDevice(
+          receiver.toDeviceInfo(
+            addresses: const ['127.0.0.1'],
+            port: server.port,
+          ),
+        ),
+      );
+
+      // A -> B
+      final (fileA, offeredA) = await makeFile(name: 'from-a.bin', size: 64000);
+      final clientA = FlowDropClient(
+        host: '127.0.0.1',
+        port: server.port,
+        identity: sender,
+        localDevice: sender.toDeviceInfo(
+          addresses: const ['127.0.0.1'],
+          port: serverA.port,
+        ),
+        expectedFingerprint: receiver.fingerprint,
+      );
+      addTearDown(clientA.close);
+      final offerA = OfferRequest(
+        sessionId: FlowDropClient.newSessionId(),
+        sender: sender.toDeviceInfo(
+          addresses: const ['127.0.0.1'],
+          port: serverA.port,
+        ),
+        files: [offeredA],
+      );
+      final acceptedA = await clientA.offer(offerA);
+      expect(acceptedA.accepted, isTrue);
+      final uploadA = await clientA.uploadFile(
+        file: offeredA,
+        localPath: fileA.path,
+        uploadPath: acceptedA.uploadUrls[offeredA.id]!,
+      );
+      final savedA = File('${downloads.path}/${uploadA.savedPath!}');
+      expect(await savedA.readAsBytes(), await fileA.readAsBytes());
+
+      // B -> A: the direction that used to need a restart, because B's
+      // in-memory trust list was never refreshed after A paired with it.
+      final (fileB, offeredB) = await makeFile(name: 'from-b.bin', size: 64000);
+      final clientB = FlowDropClient(
+        host: '127.0.0.1',
+        port: serverA.port,
+        identity: receiver,
+        localDevice: receiver.toDeviceInfo(
+          addresses: const ['127.0.0.1'],
+          port: server.port,
+        ),
+        expectedFingerprint: sender.fingerprint,
+      );
+      addTearDown(clientB.close);
+      final offerB = OfferRequest(
+        sessionId: FlowDropClient.newSessionId(),
+        sender: receiver.toDeviceInfo(
+          addresses: const ['127.0.0.1'],
+          port: server.port,
+        ),
+        files: [offeredB],
+      );
+      final acceptedB = await clientB.offer(offerB);
+      expect(acceptedB.accepted, isTrue);
+      final uploadB = await clientB.uploadFile(
+        file: offeredB,
+        localPath: fileB.path,
+        uploadPath: acceptedB.uploadUrls[offeredB.id]!,
+      );
+      final savedB = File('${downloadsA.path}/${uploadB.savedPath!}');
+      expect(await savedB.readAsBytes(), await fileB.readAsBytes());
+    });
+  });
 }
