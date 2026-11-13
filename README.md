@@ -57,6 +57,19 @@ flutter test           # full unit + integration suite
 
 Large data always moves over the LAN. Bluetooth is not used for file transfer; see `docs/ARCHITECTURE.md` for why.
 
+## Different networks (remote transfer)
+
+FlowDrop is LAN-first. If the two devices are not on the same network, use
+one of these:
+
+- **Hotspot** (easiest): put one device on the other's personal hotspot —
+  FlowDrop then works unchanged.
+- **Manual connect** over a public IP / port forward (IP : port +
+  fingerprint). Discovery won't find it; paste the address.
+- **Self-hosted relay**: `tool/relay_server.dart` bridges two devices over
+  WebSocket by a short code, end-to-end encrypted. See
+  `docs/REMOTE_TRANSFER.md` for setup and current status.
+
 ## Staying connected
 
 A device you paired with is remembered as a **first-class peer**, not as a

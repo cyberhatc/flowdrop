@@ -64,6 +64,9 @@ the same network — no account, no internet, no cloud.
   cleanup, long Windows paths, and a 10-minute idle timeout for slow links.
 - The trust store is written atomically with a backup, so a crash mid-write no
   longer loses pairings.
+- Added a self-hostable relay (`tool/relay_server.dart`) and
+  `docs/REMOTE_TRANSFER.md` as the building blocks for transfers across
+  different networks (client tunneling is the next step).
 
 ### Added
 
