@@ -18,7 +18,6 @@ lib/
   features/              screens (home, send, receive, qr, history, settings)
   ui/                    reusable glow widgets and animations
 test/                    unit + in-process integration tests
-integration_test/        on-device UI tests
 tool/                    benchmark and developer utilities
 ```
 
@@ -39,9 +38,28 @@ tool/                    benchmark and developer utilities
 
 ## Concurrency
 
-Long-lived network work runs in isolates (server and discovery) or in async I/O,
-so the UI isolate stays responsive. Progress notifications are throttled to
-about 10 Hz before they reach Riverpod.
+The server, discovery and the UI share one isolate. Everything is async I/O:
+file bytes are streamed in chunks straight from disk to socket, so a multi-GB
+transfer does not allocate buffers proportional to the file size. SHA-256 is
+computed incrementally on the same chunks. Progress notifications are
+throttled to about 10 Hz before they reach Riverpod.
+
+## Presence and reconnection
+
+Paired devices are more than a trust decision; they are durable peers:
+
+- `TrustedDevice` persists `addresses`, `port` and `lastSeen` alongside the
+  fingerprint. A cold start can therefore try the last known endpoint before
+  any discovery packet arrives.
+- `PeerRegistry` marks paired peers as `pinned`. They are never pruned; the UI
+  dims them when `lastSeen` is older than `peerTimeout` (30 s).
+- A timer probes pinned-but-offline devices over pinned HTTPS every 10 s with
+  a 30 s backoff. A successful probe refreshes the stored endpoint and flips
+  the peer live.
+- Sending files or clipboard data iterates every remembered address and the
+  default port, so a device that roamed from Wi-Fi to hotspot still connects.
+- Discovery-off / hidden visibility keeps a passive `DiscoveryService`
+  (broadcast and mDNS disabled) so paired devices stay listed and reachable.
 
 ## Storage
 
